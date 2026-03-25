@@ -1,20 +1,21 @@
-<!DOCTYPE html>
+`1<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
-<title>NeuroTheraSim X</title>
+<title>NeuroTheraSim Pro</title>
 
 <style>
-body { margin:0; font-family:Arial; background:#0a0f1f; color:#dbe3ff; }
-#container { display:flex; height:100vh; }
-canvas { background:black; }
-
-#ui {
-  width:360px;
+body { margin:0; display:flex; background:#0b1020; color:white; font-family:Arial;}
+#left { flex:1; position:relative; }
+#right {
+  width:320px;
   background:#121a33;
   padding:12px;
   overflow-y:auto;
 }
+canvas { display:block; background:black; }
+
+h3 { margin-top:10px; }
 
 button, select, input {
   width:100%;
@@ -25,16 +26,30 @@ button, select, input {
   color:white;
 }
 
-.small { font-size:12px; opacity:0.7; }
+.legend div { display:flex; align-items:center; font-size:12px; }
+.box { width:12px; height:12px; margin-right:5px; }
+
+#graph {
+  position:absolute;
+  bottom:0;
+  left:0;
+  width:100%;
+  height:120px;
+  background:#000;
+}
 </style>
 </head>
 
 <body>
-<div id="container">
-<canvas id="sim"></canvas>
 
-<div id="ui">
-<h2>NeuroTheraSim X</h2>
+<div id="left">
+<canvas id="sim"></canvas>
+<canvas id="graph"></canvas>
+</div>
+
+<div id="right">
+
+<h2>NeuroTheraSim</h2>
 
 <button onclick="toggle()">Play / Pause</button>
 <button onclick="reset()">Reset</button>
@@ -45,44 +60,59 @@ button, select, input {
 <button onclick="preset('degeneration')">Degeneration</button>
 <button onclick="preset('tumor')">Tumor</button>
 
-<h3>Therapy</h3>
+<h3>Drug</h3>
 <select id="drug">
 <option value="anti">Anti-inflammatory</option>
-<option value="growth">Neurotrophic</option>
+<option value="growth">Growth Factor</option>
 <option value="toxin">Detox</option>
 </select>
 
-<label>Dose</label>
-<input type="range" id="dose" min="0.1" max="2" step="0.1" value="1">
+Dose <input type="range" id="dose" min="0.1" max="2" step="0.1" value="1">
+Radius <input type="range" id="radius" min="1" max="8" value="3">
 
-<h3>Gene Toggles</h3>
-<label>Receptor Sensitivity</label>
-<input type="range" id="receptor" min="0.5" max="2" step="0.1" value="1">
+<h3>Gene Expression</h3>
+Receptor <input type="range" id="rec" min="0.5" max="2" step="0.1" value="1">
+Inflammation Sensitivity <input type="range" id="infl" min="0.5" max="2" step="0.1" value="1">
+Toxicity Resistance <input type="range" id="tox" min="0.5" max="2" step="0.1" value="1">
 
-<h3>Graph</h3>
-<canvas id="graph" height="100"></canvas>
+<h3>Cell Placement</h3>
+<select id="cell">
+<option value="neuron">Neuron</option>
+<option value="tumor">Tumor</option>
+<option value="erase">Erase</option>
+</select>
+
+<h3>Legend</h3>
+<div class="legend">
+<div><div class="box" style="background:cyan"></div>Neuron</div>
+<div><div class="box" style="background:white"></div>Firing neuron</div>
+<div><div class="box" style="background:yellow"></div>Tumor</div>
+<div><div class="box" style="background:red"></div>Inflammation</div>
+<div><div class="box" style="background:green"></div>Growth</div>
+<div><div class="box" style="background:blue"></div>Toxicity</div>
+</div>
 
 <h3>Save</h3>
 <button onclick="save()">Save</button>
 <button onclick="load()">Load</button>
 
-<div class="small">Click = therapy | Shift+Click = add neurons</div>
-
-</div>
 </div>
 
 <script>
 const SIZE=80;
-const canvas=document.getElementById("sim");
-const ctx=canvas.getContext("2d");
+const sim=document.getElementById("sim");
+const ctx=sim.getContext("2d");
 
-canvas.width=window.innerWidth-360;
-canvas.height=window.innerHeight;
+const graph=document.getElementById("graph");
+const gctx=graph.getContext("2d");
 
-const cellSize=canvas.width/SIZE;
+sim.width=window.innerWidth-320;
+sim.height=window.innerHeight;
+graph.width=sim.width;
 
-let running=false;
-let grid=[], field=[];
+const cellSize=sim.width/SIZE;
+
+let grid=[], field=[], running=false, history=[];
 
 function clamp(v,min=0,max=3){
  if(!isFinite(v)) return 0;
@@ -98,31 +128,32 @@ class Cell{
 
  update(x,y){
   let f=field[x][y];
-  let sens=parseFloat(document.getElementById("receptor").value);
 
-  // nonlinear dose-response
-  let infl = f.i/(1+f.i);
-  let tox = f.t/(1+f.t);
-  let growth = f.g/(1+f.g);
+  let rec=parseFloat(recSlider.value);
+  let infl=parseFloat(inflSlider.value);
+  let tox=parseFloat(toxSlider.value);
+
+  let growth=f.g/(1+f.g);
+  let inflammation=f.i/(1+f.i);
+  let toxicity=f.t/(1+f.t);
 
   if(this.type==="neuron"){
-    this.health += sens*(growth*0.02 - infl*0.03 - tox*0.04);
+    this.health += rec*(growth*0.02) - infl*(inflammation*0.03) - (toxicity*0.03)/tox;
     this.health=clamp(this.health,0,1);
 
-    // firing
-    if(this.health>0.6 && Math.random()<0.1){
+    if(this.health>0.7 && Math.random()<0.1){
       this.fire=1;
-      f.g += 0.1; // activity-dependent growth
+      f.g+=0.05;
     } else this.fire=0;
 
     if(this.health<=0){
       grid[x][y]=null;
-      f.t += 0.5;
+      f.t+=0.3;
     }
   }
 
   if(this.type==="tumor"){
-    f.i += 0.05;
+    f.i+=0.05;
     if(Math.random()<0.02){
       let nx=x+Math.floor(Math.random()*3)-1;
       let ny=y+Math.floor(Math.random()*3)-1;
@@ -141,20 +172,21 @@ function init(){
     field[x][y]={i:0,g:0,t:0};
   }
  }
+ history=[];
 }
 
 function preset(p){
  init();
  for(let x=0;x<SIZE;x++){
   for(let y=0;y<SIZE;y++){
-   if(p==="inflamed") field[x][y].i=1.5;
-   if(p==="degeneration"){
-     field[x][y].t=1;
-     if(grid[x][y]) grid[x][y].health=0.6;
-   }
-   if(p==="tumor" && Math.random()<0.05){
-     grid[x][y]=new Cell("tumor");
-   }
+    if(p==="inflamed") field[x][y].i=1.5;
+    if(p==="degeneration"){
+      field[x][y].t=1;
+      if(grid[x][y]) grid[x][y].health=0.6;
+    }
+    if(p==="tumor" && Math.random()<0.05){
+      grid[x][y]=new Cell("tumor");
+    }
   }
  }
 }
@@ -165,11 +197,11 @@ function diffuse(){
 
  for(let x=1;x<SIZE-1;x++){
   for(let y=1;y<SIZE-1;y++){
-   for(let k of ["i","g","t"]){
-    let v=field[x][y][k];
-    let s=field[x+1][y][k]+field[x-1][y][k]+field[x][y+1][k]+field[x][y-1][k];
-    nf[x][y][k]=clamp(v+r*(s-4*v));
-   }
+    for(let k of ["i","g","t"]){
+      let v=field[x][y][k];
+      let s=field[x+1][y][k]+field[x-1][y][k]+field[x][y+1][k]+field[x][y-1][k];
+      nf[x][y][k]=clamp(v+r*(s-4*v));
+    }
   }
  }
  field=nf;
@@ -177,59 +209,13 @@ function diffuse(){
 
 function step(){
  diffuse();
+
  for(let x=0;x<SIZE;x++){
   for(let y=0;y<SIZE;y++){
     if(grid[x][y]) grid[x][y].update(x,y);
   }
  }
- record();
-}
 
-function draw(){
- for(let x=0;x<SIZE;x++){
-  for(let y=0;y<SIZE;y++){
-   let f=field[x][y];
-   ctx.fillStyle=`rgb(${f.i*80},${f.g*80},${f.t*80})`;
-   ctx.fillRect(x*cellSize,y*cellSize,cellSize,cellSize);
-
-   let c=grid[x][y];
-   if(c){
-     ctx.fillStyle=c.type==="neuron"?"cyan":"yellow";
-     if(c.fire) ctx.fillStyle="white";
-     ctx.fillRect(x*cellSize+2,y*cellSize+2,cellSize-4,cellSize-4);
-   }
-  }
- }
-}
-
-// therapy FIXED (no neuron killing)
-canvas.onclick=e=>{
- let rect=canvas.getBoundingClientRect();
- let x=Math.floor((e.clientX-rect.left)/cellSize);
- let y=Math.floor((e.clientY-rect.top)/cellSize);
-
- if(e.shiftKey){
-   grid[x][y]=new Cell("neuron");
- } else {
-   let type=document.getElementById("drug").value;
-   let d=parseFloat(document.getElementById("dose").value);
-
-   for(let dx=-3;dx<=3;dx++){
-    for(let dy=-3;dy<=3;dy++){
-     let nx=x+dx, ny=y+dy;
-     if(field[nx]?.[ny]){
-       if(type==="anti") field[nx][ny].i*=Math.exp(-0.3*d);
-       if(type==="growth") field[nx][ny].g+=0.3*d;
-       if(type==="toxin") field[nx][ny].t*=Math.exp(-0.4*d);
-     }
-    }
-   }
- }
-};
-
-// graph
-let history=[];
-function record(){
  let count=0;
  for(let x=0;x<SIZE;x++){
   for(let y=0;y<SIZE;y++){
@@ -238,31 +224,76 @@ function record(){
  }
  history.push(count);
  if(history.length>200) history.shift();
- drawGraph();
+}
+
+function draw(){
+ for(let x=0;x<SIZE;x++){
+  for(let y=0;y<SIZE;y++){
+    let f=field[x][y];
+
+    ctx.fillStyle=`rgb(${f.i*80},${f.g*80},${f.t*80})`;
+    ctx.fillRect(x*cellSize,y*cellSize,cellSize,cellSize);
+
+    let c=grid[x][y];
+    if(c){
+      if(c.type==="neuron") ctx.fillStyle=c.fire?"white":"cyan";
+      if(c.type==="tumor") ctx.fillStyle="yellow";
+      ctx.fillRect(x*cellSize+2,y*cellSize+2,cellSize-4,cellSize-4);
+    }
+  }
 }
 
 function drawGraph(){
- let g=document.getElementById("graph").getContext("2d");
- g.clearRect(0,0,300,100);
- g.beginPath();
+ gctx.clearRect(0,0,graph.width,graph.height);
+ gctx.beginPath();
  history.forEach((v,i)=>{
-   g.lineTo(i,100-v/2);
+   gctx.lineTo(i,graph.height - v*1.2);
  });
- g.strokeStyle="cyan";
- g.stroke();
+ gctx.strokeStyle="cyan";
+ gctx.stroke();
 }
+
+sim.onclick=e=>{
+ let rect=sim.getBoundingClientRect();
+ let x=Math.floor((e.clientX-rect.left)/cellSize);
+ let y=Math.floor((e.clientY-rect.top)/cellSize);
+
+ if(e.shiftKey){
+   let type=document.getElementById("cell").value;
+   if(type==="erase") grid[x][y]=null;
+   else grid[x][y]=new Cell(type);
+ } else {
+   let d=parseFloat(dose.value);
+   let r=parseInt(radius.value);
+   let type=drug.value;
+
+   for(let dx=-r;dx<=r;dx++){
+    for(let dy=-r;dy<=r;dy++){
+      let nx=x+dx, ny=y+dy;
+      if(field[nx]?.[ny]){
+        if(type==="anti") field[nx][ny].i*=Math.exp(-0.3*d);
+        if(type==="growth") field[nx][ny].g+=0.3*d;
+        if(type==="toxin") field[nx][ny].t*=Math.exp(-0.3*d);
+      }
+    }
+   }
+ }
+};
 
 function save(){
  localStorage.setItem("sim",JSON.stringify({grid,field}));
 }
-
 function load(){
- let data=JSON.parse(localStorage.getItem("sim"));
- if(data){ grid=data.grid; field=data.field; }
+ let d=JSON.parse(localStorage.getItem("sim"));
+ if(d){ grid=d.grid; field=d.field; }
 }
 
 function loop(){
- if(running){ step(); draw(); }
+ if(running){
+   step();
+   draw();
+   drawGraph();
+ }
  requestAnimationFrame(loop);
 }
 
@@ -272,5 +303,6 @@ function reset(){ init(); }
 init();
 loop();
 </script>
+
 </body>
 </html>
