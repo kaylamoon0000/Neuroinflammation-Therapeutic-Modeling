@@ -3,12 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NeuroTheraSim | Clinical Fidelity v1.5</title>
+    <title>NeuroTheraSim | Clinical Fidelity v1.6</title>
     <style>
         :root { --bg: #020617; --panel: #0f172a; --text: #f1f5f9; --accent: #38bdf8; --danger: #ef4444; --success: #22c55e; --border: #334155; }
         body { margin: 0; font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); display: flex; height: 100vh; overflow: hidden; }
         
-        /* Sidebar */
         #sidebar { width: 360px; background: var(--panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 20px; overflow-y: auto; box-sizing: border-box; }
         h1 { font-size: 1.4rem; color: var(--accent); margin: 0; font-weight: 800; }
         .ver { font-size: 0.6rem; opacity: 0.5; margin-bottom: 20px; text-transform: uppercase; }
@@ -21,12 +20,10 @@
         #run-btn { background: var(--success); color: #052e16; }
         #run-btn.active { background: var(--danger); color: white; }
         
-        /* Therapy Buttons */
-        .btn-bdnf { background: #0ea5e9; color: white; }
-        .btn-il10 { background: #10b981; color: white; }
-        .btn-chemo { background: #f59e0b; color: white; }
+        #btn-bdnf { background: #0ea5e9; color: white; }
+        #btn-il10 { background: #10b981; color: white; }
+        #btn-chemo { background: #f59e0b; color: white; }
 
-        /* Main View */
         #main { flex-grow: 1; display: flex; flex-direction: column; }
         #top-bar { height: 75px; background: var(--panel); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 30px; gap: 40px; }
         .stat { display: flex; flex-direction: column; }
@@ -45,65 +42,61 @@
 
 <div id="sidebar">
     <h1>NeuroTheraSim</h1>
-    <div class="ver">v1.5 | Clinical Fidelity Build</div>
+    <div class="ver">v1.6 | Clinical Accuracy Fix</div>
     
     <div class="section">
-        <label>Time Speed (Years/Sec)</label>
-        <input type="range" id="speed-slider" min="1" max="100" value="20">
+        <label>Time Compression (Yrs/Min)</label>
+        <input type="range" id="speed-slider" min="1" max="100" value="25">
     </div>
 
     <div class="section">
         <label>Patient Profile</label>
         <div style="display:flex; gap:8px;">
             <select id="sex-input"><option value="female">Female</option><option value="male">Male</option></select>
-            <input type="number" id="age-input" value="80" title="Starting Age">
+            <input type="number" id="age-input" value="80">
         </div>
-        <label style="margin-top:10px;">Disease Pathophysiology</label>
+        <label style="margin-top:10px;">Disease Pathway</label>
         <select id="preset-select">
-            <option value="healthy">Healthy Baseline</option>
-            <option value="ad">Alzheimer's (Neurodegenerative)</option>
-            <option value="gbm">Glioblastoma (Malignant)</option>
+            <option value="healthy">Healthy Brain</option>
+            <option value="ad">Alzheimer's Disease</option>
+            <option value="gbm">Glioblastoma</option>
         </select>
     </div>
 
     <div class="section">
-        <label>Cell Placement Tool</label>
+        <label>Manual Tool</label>
         <select id="tool-select">
             <option value="neuron">Place Neuron</option>
             <option value="microglia">Place Microglia</option>
-            <option value="cancer">Seed Tumor Cell</option>
+            <option value="cancer">Place Cancer Cell</option>
         </select>
     </div>
 
     <div class="section">
-        <label>Therapeutic Injections</label>
-        <button id="btn-bdnf" class="btn-bdnf">Inject BDNF (Repair)</button>
-        <button id="btn-il10" class="btn-il10">Inject IL-10 (Anti-Inf)</button>
-        <button id="btn-chemo" class="btn-chemo">Inject Chemo (Cytotoxic)</button>
+        <label>Therapeutics</label>
+        <button id="btn-bdnf">BDNF (Cyan)</button>
+        <button id="btn-il10">IL-10 (Green)</button>
+        <button id="btn-chemo">Chemo (Orange)</button>
     </div>
 
     <button id="run-btn">START SIMULATION</button>
-    <button id="export-btn" style="background: #6366f1; color: white;">EXPORT DATA (.CSV)</button>
-    <button id="reset-btn" style="background:#475569; margin-top:10px;">RESET ENVIRONMENT</button>
+    <button id="export-btn" style="background: #6366f1; color: white;">EXPORT CSV</button>
+    <button id="reset-btn" style="background:#475569; margin-top:10px;">RESET LAB</button>
 </div>
 
 <div id="main">
     <div id="top-bar">
         <div class="stat"><span class="stat-label">Timeline</span><span id="stat-days" class="stat-value">0.0 Yrs</span></div>
-        <div class="stat"><span class="stat-label">Neuron Viability</span><span id="stat-neurons" class="stat-value">100%</span></div>
-        <div class="stat"><span class="stat-label">Inflammation (Tox)</span><span id="stat-tox" class="stat-value">0.0%</span></div>
+        <div class="stat"><span class="stat-label">Neuron Viability</span><span id="stat-neurons" class="stat-value">100.0%</span></div>
+        <div class="stat"><span class="stat-label">Inflammation</span><span id="stat-tox" class="stat-value">0.0%</span></div>
     </div>
 
     <div id="canvas-wrap">
         <canvas id="simCanvas"></canvas>
         <div id="legend">
-            <div class="legend-row"><div class="dot" style="background:#38bdf8"></div> Healthy Neuron</div>
-            <div class="legend-row"><div class="dot" style="background:#ef4444"></div> Activated Microglia</div>
+            <div class="legend-row"><div class="dot" style="background:#38bdf8"></div> Neuron</div>
+            <div class="legend-row"><div class="dot" style="background:#ef4444"></div> Activated Glia</div>
             <div class="legend-row"><div class="dot" style="background:#a855f7"></div> Malignant Cell</div>
-            <hr style="border:0; border-top:1px solid #334155; margin:5px 0;">
-            <div class="legend-row"><div class="dot" style="background:#0ea5e9"></div> BDNF Field</div>
-            <div class="legend-row"><div class="dot" style="background:#10b981"></div> IL-10 Field</div>
-            <div class="legend-row"><div class="dot" style="background:#f59e0b"></div> Chemo Field</div>
         </div>
     </div>
 </div>
@@ -114,8 +107,9 @@ const canvas = document.getElementById('simCanvas');
 const ctx = canvas.getContext('2d');
 canvas.width = canvas.height = DIM * ZOOM;
 
-let isRunning = false, ticks = 0, initialNeuronCount = 0;
-let cells = [], dataHistory = [];
+let isRunning = false, ticks = 0;
+let initialNeurons = 0;
+let cells = [], history = [];
 let grids = {
     tox: Array(DIM).fill().map(() => Array(DIM).fill(0)),
     bdnf: Array(DIM).fill().map(() => Array(DIM).fill(0)),
@@ -129,49 +123,43 @@ class Cell {
         this.health = 100; this.active = false; this.repro = 0;
     }
 
-    update(currentAge, tx, bdnf, il10, chemo) {
+    update(age, tx, bdnf, il10, chemo) {
         if (this.health <= 0) return;
 
-        // ACCURACY FIX: Higher base fragility for elderly
-        // Damage accelerates exponentially as the patient ages during the simulation
-        const fragility = Math.pow(currentAge / 55, 3); 
+        // ACCURACY FIX: Higher age creates a massive resistance to repair
+        const repairInhibition = age / 40; 
+        const damageSensitivity = Math.pow(age / 55, 2.5);
 
         if (this.type === 'neuron') {
-            // Natural senescence (very slow)
-            this.health -= 0.001 * fragility;
-
-            // AD Pathophysiology: Inflammation damage
+            // Natural senescence
+            this.health -= 0.005 * damageSensitivity;
+            // Alzheimer's Toxicity
             if (tx > 0.1) {
-                const protection = il10 * 0.9;
-                this.health -= Math.max(0, (tx - protection) * (0.5 * fragility));
+                this.health -= (tx - (il10 * 0.5)) * (0.8 * damageSensitivity);
             }
-            
-            // Chemo is neurotoxic
-            if (chemo > 0.2) this.health -= chemo * 0.4;
-
-            // Therapeutic recovery (capped at 100)
-            if (bdnf > 0.1 && this.health < 100) {
-                this.health = Math.min(100, this.health + 0.2);
+            // Chemo Side Effects
+            if (chemo > 0.1) this.health -= chemo * 0.3;
+            // BDNF Healing (Hard Capped at 100)
+            if (bdnf > 0.2 && this.health < 100) {
+                this.health = Math.min(100, this.health + (0.4 / repairInhibition));
             }
         }
 
         if (this.type === 'microglia') {
-            if (tx > 0.25 || this.active) {
+            if (tx > 0.3 || this.active) {
                 this.active = true;
                 const cx = Math.floor(this.x), cy = Math.floor(this.y);
-                grids.tox[cx][cy] = Math.min(1, grids.tox[cx][cy] + 0.05);
+                grids.tox[cx][cy] = Math.min(1.2, grids.tox[cx][cy] + 0.08);
             }
-            if (il10 > 0.5) this.active = false;
+            if (il10 > 0.6) this.active = false;
         }
 
         if (this.type === 'cancer') {
             this.repro++;
             const cx = Math.floor(this.x), cy = Math.floor(this.y);
-            grids.tox[cx][cy] = 1.0; 
-            if (chemo > 0.1) this.health -= chemo * 10;
-            if (this.repro > 40 && this.health > 50) { 
-                this.repro = 0; return 'divide'; 
-            }
+            grids.tox[cx][cy] = 1.0;
+            if (chemo > 0.2) this.health -= chemo * 15;
+            if (this.repro > 45 && this.health > 40) { this.repro = 0; return 'divide'; }
         }
         return null;
     }
@@ -180,8 +168,7 @@ class Cell {
         if (this.health <= 0) return;
         ctx.fillStyle = this.type === 'neuron' ? '#38bdf8' : (this.type === 'cancer' ? '#a855f7' : (this.active ? '#ef4444' : '#22c55e'));
         ctx.globalAlpha = Math.max(0.2, this.health / 100);
-        ctx.beginPath(); ctx.arc(this.x * ZOOM, this.y * ZOOM, 2.8, 0, Math.PI*2); ctx.fill();
-        ctx.globalAlpha = 1;
+        ctx.beginPath(); ctx.arc(this.x * ZOOM, this.y * ZOOM, 3, 0, Math.PI*2); ctx.fill();
     }
 }
 
@@ -197,23 +184,19 @@ function diffuse(grid, rate, decay) {
 }
 
 function init() {
-    cells = []; ticks = 0; dataHistory = [];
+    cells = []; ticks = 0; history = [];
     Object.keys(grids).forEach(k => grids[k] = Array(DIM).fill().map(() => Array(DIM).fill(0)));
     
     const preset = document.getElementById('preset-select').value;
-    
-    // Seed ~1500 Neurons
-    for(let i=0; i<1500; i++) cells.push(new Cell(Math.random()*DIM, Math.random()*DIM, 'neuron'));
-    for(let i=0; i<200; i++) cells.push(new Cell(Math.random()*DIM, Math.random()*DIM, 'microglia'));
+    for(let i=0; i<1200; i++) cells.push(new Cell(Math.random()*DIM, Math.random()*DIM, 'neuron'));
+    for(let i=0; i<150; i++) cells.push(new Cell(Math.random()*DIM, Math.random()*DIM, 'microglia'));
 
-    initialNeuronCount = cells.filter(c => c.type === 'neuron').length;
+    initialNeurons = cells.filter(c => c.type === 'neuron').length;
 
     if (preset === 'ad') {
-        for(let j=0; j<40; j++) grids.tox[Math.floor(Math.random()*DIM)][Math.floor(Math.random()*DIM)] = 1.0;
+        for(let j=0; j<50; j++) grids.tox[Math.floor(Math.random()*DIM)][Math.floor(Math.random()*DIM)] = 1.0;
     }
-    if (preset === 'gbm') {
-        cells.push(new Cell(50, 50, 'cancer'));
-    }
+    if (preset === 'gbm') cells.push(new Cell(50, 50, 'cancer'));
 
     updateUI();
     render();
@@ -222,33 +205,33 @@ function init() {
 function step() {
     if (!isRunning) return;
     const speed = parseInt(document.getElementById('speed-slider').value);
-    const startAge = parseInt(document.getElementById('age-input').value);
+    const baseAge = parseInt(document.getElementById('age-input').value);
 
     for(let s=0; s<speed; s++) {
         ticks++;
-        const currentAge = startAge + (ticks / 1000); // Age increases as simulation runs
+        const currentAge = baseAge + (ticks / 1000);
         
         grids.tox = diffuse(grids.tox, 0.1, 0.99);
-        grids.bdnf = diffuse(grids.bdnf, 0.15, 0.96);
+        grids.bdnf = diffuse(grids.bdnf, 0.15, 0.95);
         grids.il10 = diffuse(grids.il10, 0.08, 0.97);
-        grids.chemo = diffuse(grids.chemo, 0.12, 0.94);
+        grids.chemo = diffuse(grids.chemo, 0.12, 0.93);
 
         let newborns = [];
         cells.forEach(c => {
-            const cx = Math.floor(c.x), cy = Math.floor(c.y);
+            const cx = Math.floor(Math.max(0, Math.min(DIM-1, c.x)));
+            const cy = Math.floor(Math.max(0, Math.min(DIM-1, c.y)));
             const res = c.update(currentAge, grids.tox[cx][cy], grids.bdnf[cx][cy], grids.il10[cx][cy], grids.chemo[cx][cy]);
-            if (res === 'divide') newborns.push(new Cell(c.x+(Math.random()-0.5)*6, c.y+(Math.random()-0.5)*6, 'cancer'));
+            if (res === 'divide') newborns.push(new Cell(c.x + (Math.random()-0.5)*5, c.y + (Math.random()-0.5)*5, 'cancer'));
         });
         cells.push(...newborns);
 
-        // Record for CSV every 'quarter year'
-        if (ticks % 250 === 0) {
+        if (ticks % 500 === 0) {
             const alive = cells.filter(c => c.type === 'neuron' && c.health > 0).length;
-            dataHistory.push({ year: (ticks/1000).toFixed(2), viability: ((alive/initialNeuronCount)*100).toFixed(2) });
+            history.push({ yr: (ticks/1000).toFixed(2), v: ((alive/initialNeurons)*100).toFixed(2) });
         }
     }
     render();
-    updateUI(startAge);
+    updateUI();
     requestAnimationFrame(step);
 }
 
@@ -265,34 +248,26 @@ function render() {
     cells.forEach(c => c.draw());
 }
 
-function updateUI(startAge) {
+function updateUI() {
     const alive = cells.filter(c => c.type === 'neuron' && c.health > 0).length;
-    const toxAvg = grids.tox.flat().reduce((a,b)=>a+b,0) / (DIM*DIM);
-    const yearsElapsed = ticks/1000;
+    const toxAvg = (grids.tox.flat().reduce((a,b)=>a+b,0) / (DIM*DIM)) * 100;
     
-    document.getElementById('stat-days').innerText = `${yearsElapsed.toFixed(1)} Yrs`;
-    // ACCURACY FIX: Strictly capped at 100%
-    const viability = Math.min(100, (alive / initialNeuronCount) * 100);
+    document.getElementById('stat-days').innerText = `${(ticks/1000).toFixed(1)} Yrs`;
+    // VIABILITY FIX: Capped at 100.0%
+    const viability = Math.min(100, (alive / initialNeurons) * 100);
     document.getElementById('stat-neurons').innerText = `${viability.toFixed(1)}%`;
-    document.getElementById('stat-tox').innerText = `${(toxAvg*100).toFixed(1)}%`;
-
-    // Mortality Check
-    if (startAge + yearsElapsed > 115) {
-        isRunning = false;
-        alert("Simulation Ended: Subject Age Limit Reached.");
-    }
+    document.getElementById('stat-tox').innerText = `${toxAvg.toFixed(1)}%`;
 }
 
-// User Interaction
-canvas.addEventListener('mousedown', (e) => {
+// Controls
+canvas.onmousedown = (e) => {
     const rect = canvas.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / ZOOM;
-    const y = (e.clientY - rect.top) / ZOOM;
-    const type = document.getElementById('tool-select').value;
-    cells.push(new Cell(x, y, type));
-    if (type === 'neuron') initialNeuronCount++;
+    const x = (e.clientX - rect.left) / ZOOM, y = (e.clientY - rect.top) / ZOOM;
+    const t = document.getElementById('tool-select').value;
+    cells.push(new Cell(x, y, t));
+    if (t === 'neuron') initialNeurons++;
     render();
-});
+};
 
 document.getElementById('run-btn').onclick = (e) => {
     isRunning = !isRunning; e.target.innerText = isRunning ? "PAUSE" : "RESUME";
@@ -300,19 +275,15 @@ document.getElementById('run-btn').onclick = (e) => {
 };
 
 document.getElementById('export-btn').onclick = () => {
-    let csv = "Year,NeuronViabilityPercent\n";
-    dataHistory.forEach(d => csv += `${d.year},${d.viability}\n`);
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.setAttribute('hidden', ''); a.setAttribute('href', url);
-    a.setAttribute('download', 'neuro_data.csv');
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    let csv = "Year,Viability%\n" + history.map(h => `${h.yr},${h.v}`).join("\n");
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(new Blob([csv], {type: "text/csv"}));
+    link.download = "neuro_results.csv"; link.click();
 };
 
-document.getElementById('btn-bdnf').onclick = () => grids.bdnf[50][50] = 15.0;
-document.getElementById('btn-il10').onclick = () => { for(let i=0; i<10; i++) grids.il10[Math.floor(Math.random()*DIM)][Math.floor(Math.random()*DIM)] = 8.0; };
-document.getElementById('btn-chemo').onclick = () => grids.chemo.forEach(r => r.fill(0.6));
+document.getElementById('btn-bdnf').onclick = () => grids.bdnf[50][50] = 12.0;
+document.getElementById('btn-il10').onclick = () => { for(let i=0; i<8; i++) grids.il10[Math.floor(Math.random()*DIM)][Math.floor(Math.random()*DIM)] = 6.0; };
+document.getElementById('btn-chemo').onclick = () => grids.chemo.forEach(r => r.fill(0.7));
 document.getElementById('reset-btn').onclick = init;
 
 init();
