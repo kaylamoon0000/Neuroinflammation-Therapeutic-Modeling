@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>NeuroTheraSim Advanced</title>
+<title>NeuroTheraSim</title>
 
 <style>
 body { margin:0; display:flex; background:#0b1020; color:white; font-family:Arial;}
@@ -10,8 +10,6 @@ body { margin:0; display:flex; background:#0b1020; color:white; font-family:Aria
 #right { width:340px; background:#121a33; padding:12px; overflow-y:auto; }
 
 canvas { display:block; }
-
-h3 { margin-top:10px; }
 
 button, select, input {
   width:100%;
@@ -22,9 +20,7 @@ button, select, input {
   color:white;
 }
 
-#graph { height:150px; background:black; }
-
-.stat { font-size:13px; margin:2px 0; }
+.stat { font-size:13px; }
 </style>
 </head>
 
@@ -41,12 +37,6 @@ button, select, input {
 
 <button id="toggle">Play / Pause</button>
 <button id="reset">Reset</button>
-
-<h3>Presets</h3>
-<button onclick="preset('healthy')">Healthy</button>
-<button onclick="preset('inflamed')">Inflammation</button>
-<button onclick="preset('degeneration')">Degeneration</button>
-<button onclick="preset('tumor')">Tumor</button>
 
 <h3>Therapy</h3>
 <select id="therapy">
@@ -69,7 +59,7 @@ Sex
 </select>
 
 <h3>Metrics</h3>
-<div id="stats"></div>
+<div id="stats" class="stat"></div>
 
 </div>
 
@@ -89,122 +79,85 @@ function resize(){
 resize();
 window.onresize = resize;
 
-const SIZE = 80;
+const SIZE=70;
 let cellSize;
 
 let grid=[], field=[], running=false;
-let history = {neurons:[], tumors:[], infl:[]};
+let histN=[], histT=[], histI=[];
 let effects=[];
 
-// ===== INIT =====
 function init(){
  grid=[]; field=[];
- cellSize = sim.width / SIZE;
+ cellSize=sim.width/SIZE;
 
  for(let x=0;x<SIZE;x++){
   grid[x]=[]; field[x]=[];
   for(let y=0;y<SIZE;y++){
-   grid[x][y] = Math.random()<0.12 ? {type:"neuron",h:1} : null;
-   field[x][y] = {i:0,g:0,t:0};
+   grid[x][y]=Math.random()<0.12?{type:"neuron",h:1}:null;
+   field[x][y]={i:0,g:0,t:0};
   }
  }
 }
 init();
 
-// ===== PRESETS =====
-function preset(p){
- init();
-
- for(let x=0;x<SIZE;x++){
-  for(let y=0;y<SIZE;y++){
-   if(p==="inflamed") field[x][y].i=1;
-   if(p==="degeneration") field[x][y].t=1;
-   if(p==="tumor" && Math.random()<0.05){
-     grid[x][y]={type:"tumor",h:1};
-   }
-  }
- }
-}
-
-// ===== STEP =====
 function step(){
 
- let age = document.getElementById("age").value;
- let sex = document.getElementById("sex").value;
+ let age=+ageSlider.value;
+ let sexFactor=sexSelect.value==="female"?0.9:1;
+ let ageFactor=1+(age-40)/120;
 
- let ageFactor = 1 + (age-40)/120;
- let inflFactor = sex==="female" ? 0.9 : 1;
+ let neurons=0, tumors=0, inflSum=0;
 
  for(let x=0;x<SIZE;x++){
   for(let y=0;y<SIZE;y++){
 
    let c=grid[x][y];
    let f=field[x][y];
-   if(!c) continue;
 
-   let growth = f.g/(1+f.g);
-   let infl = f.i/(1+f.i);
-   let tox = f.t/(1+f.t);
+   // decay fields
+   f.i*=0.98; f.g*=0.98; f.t*=0.98;
 
-   if(c.type==="neuron"){
-     c.h += growth*0.02 - infl*0.025*inflFactor - tox*0.03*ageFactor;
-     c.h = Math.max(0,Math.min(1,c.h));
-
-     if(c.h<=0){
-       grid[x][y]=null;
-       f.t+=0.3;
-     }
-   }
-
-   if(c.type==="tumor"){
-     f.i += 0.03;
-     if(Math.random()<0.015){
-       let nx=x+(Math.random()*3|0)-1;
-       let ny=y+(Math.random()*3|0)-1;
-       if(grid[nx]?.[ny]==null) grid[nx][ny]={type:"tumor",h:1};
-     }
-   }
-  }
- }
-
- // diffusion (stable)
- for(let x=1;x<SIZE-1;x++){
-  for(let y=1;y<SIZE-1;y++){
-   field[x][y].i *= 0.98;
-   field[x][y].g *= 0.98;
-   field[x][y].t *= 0.98;
-  }
- }
-
- // metrics
- let neurons=0,tumors=0, inflSum=0;
-
- for(let x=0;x<SIZE;x++){
-  for(let y=0;y<SIZE;y++){
-   let c=grid[x][y];
    if(c){
-     if(c.type==="neuron") neurons++;
-     if(c.type==="tumor") tumors++;
+     let g=f.g/(1+f.g);
+     let i=f.i/(1+f.i);
+     let t=f.t/(1+f.t);
+
+     if(c.type==="neuron"){
+       c.h += g*0.02 - i*0.025*sexFactor - t*0.03*ageFactor;
+       c.h=Math.max(0,Math.min(1,c.h));
+
+       if(c.h<=0){ grid[x][y]=null; }
+       else neurons++;
+     }
+
+     if(c.type==="tumor"){
+       tumors++;
+       f.i+=0.02;
+
+       if(Math.random()<0.01){
+         let nx=x+(Math.random()*3|0)-1;
+         let ny=y+(Math.random()*3|0)-1;
+         if(grid[nx]?.[ny]==null) grid[nx][ny]={type:"tumor",h:1};
+       }
+     }
    }
-   inflSum+=field[x][y].i;
+
+   inflSum+=f.i;
   }
  }
 
- history.neurons.push(neurons);
- history.tumors.push(tumors);
- history.infl.push(inflSum/1000);
+ histN.push(neurons);
+ histT.push(tumors);
+ histI.push(inflSum/500);
 
- if(history.neurons.length>200){
-  history.neurons.shift();
-  history.tumors.shift();
-  history.infl.shift();
+ if(histN.length>200){
+  histN.shift(); histT.shift(); histI.shift();
  }
 
- document.getElementById("stats").innerHTML =
+ document.getElementById("stats").innerHTML=
  `Neurons: ${neurons}<br>Tumors: ${tumors}<br>Inflammation: ${inflSum.toFixed(1)}`;
 }
 
-// ===== DRAW =====
 function draw(){
 
  ctx.fillStyle="black";
@@ -215,55 +168,62 @@ function draw(){
 
    let f=field[x][y];
 
-   // soft field overlay
-   ctx.fillStyle=`rgba(${f.i*200},${f.g*200},${f.t*200},0.2)`;
+   ctx.fillStyle=`rgba(${f.i*255},${f.g*255},${f.t*255},0.15)`;
    ctx.fillRect(x*cellSize,y*cellSize,cellSize,cellSize);
 
    let c=grid[x][y];
    if(c){
      ctx.fillStyle=c.type==="neuron"?"cyan":"yellow";
      ctx.beginPath();
-     ctx.arc(x*cellSize,y*cellSize,cellSize/3,0,Math.PI*2);
+     ctx.arc(x*cellSize,y*cellSize,cellSize/3,0,6.28);
      ctx.fill();
    }
   }
  }
 
- // therapy visualization
  effects.forEach(e=>{
    ctx.beginPath();
-   ctx.arc(e.x,e.y,e.r,0,Math.PI*2);
+   ctx.arc(e.x,e.y,e.r,0,6.28);
    ctx.strokeStyle="white";
    ctx.stroke();
-   e.r+=2;
+   e.r+=3;
  });
  effects=effects.filter(e=>e.r<80);
 }
 
-// ===== GRAPH =====
 function drawGraph(){
  gctx.clearRect(0,0,graph.width,graph.height);
 
  gctx.strokeStyle="cyan";
  gctx.beginPath();
- history.neurons.forEach((v,i)=>gctx.lineTo(i,150-v));
+ histN.forEach((v,i)=>gctx.lineTo(i,150-v));
  gctx.stroke();
 
  gctx.strokeStyle="yellow";
  gctx.beginPath();
- history.tumors.forEach((v,i)=>gctx.lineTo(i,150-v));
+ histT.forEach((v,i)=>gctx.lineTo(i,150-v));
+ gctx.stroke();
+
+ gctx.strokeStyle="red";
+ gctx.beginPath();
+ histI.forEach((v,i)=>gctx.lineTo(i,150-v));
  gctx.stroke();
 }
 
-// ===== THERAPY =====
+// controls
+const therapySel=document.getElementById("therapy");
+const doseSlider=document.getElementById("dose");
+const radiusSlider=document.getElementById("radius");
+const ageSlider=document.getElementById("age");
+const sexSelect=document.getElementById("sex");
+
 sim.onclick=e=>{
  let rect=sim.getBoundingClientRect();
  let x=Math.floor((e.clientX-rect.left)/cellSize);
  let y=Math.floor((e.clientY-rect.top)/cellSize);
 
- let d=document.getElementById("dose").value;
- let r=document.getElementById("radius").value;
- let type=document.getElementById("therapy").value;
+ let r=+radiusSlider.value;
+ let d=+doseSlider.value;
 
  effects.push({x:e.clientX-rect.left,y:e.clientY-rect.top,r:5});
 
@@ -271,20 +231,26 @@ sim.onclick=e=>{
   for(let dy=-r;dy<=r;dy++){
    let nx=x+dx, ny=y+dy;
    if(field[nx]?.[ny]){
-
      let f=field[nx][ny];
 
-     if(type==="il10") f.i*=0.6;
-     if(type==="bdnf") f.g+=0.4*d;
-     if(type==="nac") f.t*=0.5;
-     if(type==="tmz" && grid[nx][ny]?.type==="tumor") grid[nx][ny]=null;
-     if(type==="stem") grid[nx][ny]={type:"neuron",h:1};
+     if(therapySel.value==="il10") f.i*=0.5;
+     if(therapySel.value==="bdnf") f.g+=0.4*d;
+     if(therapySel.value==="nac") f.t*=0.5;
+
+     if(therapySel.value==="tmz"){
+       if(grid[nx][ny]?.type==="tumor") grid[nx][ny]=null;
+     }
+
+     if(therapySel.value==="stem"){
+       if(!grid[nx][ny] && Math.random()<0.3){
+         grid[nx][ny]={type:"neuron",h:1};
+       }
+     }
    }
   }
  }
 };
 
-// ===== LOOP =====
 function loop(){
  if(running){
    step();
