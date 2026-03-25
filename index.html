@@ -3,271 +3,233 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NeuroTheraSim - Interactive Lab</title>
+    <title>NeuroTheraSim | Chronos Update</title>
     <style>
-        :root { --bg: #0b0f1a; --panel: #161e2d; --text: #e2e8f0; --accent: #38bdf8; --border: #334155; }
-        body { margin: 0; font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text); display: flex; height: 100vh; overflow: hidden; }
+        :root { --bg: #0f172a; --panel: #1e293b; --text: #f1f5f9; --accent: #38bdf8; --danger: #ef4444; --success: #22c55e; }
+        body { margin: 0; font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); display: flex; height: 100vh; overflow: hidden; }
         
-        /* Sidebar */
-        #sidebar { width: 320px; background: var(--panel); padding: 15px; border-right: 1px solid var(--border); overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
-        h1 { font-size: 1.1rem; color: var(--accent); margin: 0; display: flex; align-items: center; gap: 8px; }
-        .group { background: rgba(0,0,0,0.2); padding: 12px; border-radius: 8px; border: 1px solid var(--border); }
-        label { display: block; font-size: 0.75rem; font-weight: 600; margin-bottom: 6px; color: #94a3b8; }
-        select, input, button { width: 100%; padding: 8px; border-radius: 5px; border: 1px solid var(--border); background: #1e293b; color: white; font-size: 0.85rem; outline: none; }
-        button { cursor: pointer; transition: 0.2s; font-weight: 600; margin-top: 5px; }
-        button:hover { background: #334155; }
-        #run-btn { background: #059669; border: none; }
-        #run-btn.stop { background: #dc2626; }
+        #sidebar { width: 340px; background: var(--panel); border-right: 1px solid #334155; display: flex; flex-direction: column; padding: 20px; box-sizing: border-box; overflow-y: auto; }
+        h1 { font-size: 1.25rem; margin: 0 0 20px 0; color: var(--accent); letter-spacing: -0.5px; }
         
-        /* Main View */
-        #main { flex-grow: 1; position: relative; display: flex; flex-direction: column; }
-        #header-bar { height: 50px; background: var(--panel); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 20px; justify-content: space-between; }
-        #viewport { flex-grow: 1; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle, #1e293b 0%, #0b0f1a 100%); cursor: crosshair; }
-        canvas { box-shadow: 0 0 40px rgba(0,0,0,0.5); background: #000; image-rendering: pixelated; }
+        .section { margin-bottom: 15px; padding: 12px; background: rgba(15, 23, 42, 0.5); border-radius: 8px; border: 1px solid #334155; }
+        label { display: block; font-size: 0.65rem; text-transform: uppercase; font-weight: 700; margin-bottom: 6px; color: #94a3b8; }
+        
+        select, input, button { width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #475569; background: #0f172a; color: white; font-size: 0.85rem; margin-bottom: 8px; box-sizing: border-box; }
+        input[type="range"] { padding: 0; cursor: pointer; }
+        
+        button { cursor: pointer; transition: all 0.2s; font-weight: 600; border: none; }
+        #run-btn { background: var(--success); color: #052e16; }
+        #run-btn.active { background: var(--danger); color: white; }
+        #export-btn { background: #6366f1; color: white; margin-top: 5px; }
 
-        /* Overlays */
-        #legend { position: absolute; bottom: 20px; left: 20px; background: rgba(15, 23, 42, 0.9); padding: 10px; border-radius: 8px; font-size: 0.75rem; border: 1px solid var(--border); }
-        .legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-        .dot { width: 8px; height: 8px; border-radius: 50%; }
-        #stats { font-family: monospace; font-size: 0.85rem; display: flex; gap: 20px; }
-        .stat-val { color: var(--accent); }
+        #main-content { flex-grow: 1; display: flex; flex-direction: column; position: relative; }
+        #header-stats { height: 65px; background: #1e293b; border-bottom: 1px solid #334155; display: flex; align-items: center; padding: 0 30px; gap: 40px; }
+        .stat-box { display: flex; flex-direction: column; }
+        .stat-label { font-size: 0.6rem; color: #94a3b8; text-transform: uppercase; }
+        .stat-value { font-family: 'JetBrains Mono', monospace; font-size: 1.1rem; color: var(--accent); }
+
+        #canvas-container { flex-grow: 1; display: flex; align-items: center; justify-content: center; background: #020617; position: relative; }
+        canvas { background: #000; box-shadow: 0 0 60px rgba(0,0,0,0.8); cursor: crosshair; image-rendering: pixelated; }
+
+        #log-feed { font-family: monospace; font-size: 0.7rem; color: #64748b; height: 60px; overflow: hidden; line-height: 1.4; }
     </style>
 </head>
 <body>
 
 <div id="sidebar">
-    <h1>🧠 NeuroTheraSim</h1>
+    <h1>NeuroTheraSim</h1>
     
-    <div class="group">
-        <label>Patient Demographics</label>
-        <div style="display:flex; gap:5px; margin-bottom:10px;">
-            <select id="sex-select"><option value="female">Female</option><option value="male">Male</option></select>
-            <input type="number" id="age-input" value="45" style="width:60px">
+    <div class="section">
+        <label>Time Progression Speed</label>
+        <input type="range" id="speed-slider" min="0" max="10" step="1" value="1">
+        <div style="font-size: 0.7rem; display: flex; justify-content: space-between; color: #94a3b8;">
+            <span>Pause</span><span>Real-time</span><span>Time-lapse</span>
         </div>
-        <label>Disease State</label>
+    </div>
+
+    <div class="section">
+        <label>Subject Profile (Age & Sex)</label>
+        <div style="display: flex; gap: 8px;">
+            <select id="sex-input"><option value="female">Female</option><option value="male">Male</option></select>
+            <input type="number" id="age-input" value="45" min="1" max="100">
+        </div>
+        <label style="margin-top:10px;">Clinical Preset</label>
         <select id="preset-select">
             <option value="healthy">Healthy Baseline</option>
-            <option value="alzheimers">Alzheimer's Model</option>
-            <option value="glioblastoma">Glioblastoma (GBM)</option>
-            <option value="stroke">Acute Ischemic Stroke</option>
+            <option value="ad">Alzheimer's Disease</option>
+            <option value="gbm">Glioblastoma Multiforme</option>
         </select>
     </div>
 
-    <div class="group">
-        <label>Interaction Mode</label>
-        <select id="mouse-mode">
-            <option value="inspect">Inspect Cell</option>
+    <div class="section">
+        <label>Interactive Tools</label>
+        <select id="tool-select">
             <option value="add_neuron">Place Neuron</option>
-            <option value="add_cancer">Place Tumor Cell</option>
-            <option value="add_microglia">Place Microglia</option>
+            <option value="add_cancer">Seed Tumor</option>
+            <option value="inject">Localized Injection</option>
         </select>
-    </div>
-
-    <div class="group">
-        <label>Active Therapy</label>
-        <select id="drug-select">
-            <option value="anti_inf">Anti-Inflammatory (IL-10)</option>
-            <option value="neuro_grow">Growth Factor (BDNF)</option>
-            <option value="chemo">Cytotoxic Chemo</option>
-        </select>
-        <button id="inject-btn" style="background: var(--accent); color: #000;">Incorporate Therapy</button>
     </div>
 
     <button id="run-btn">START SIMULATION</button>
-    <button id="reset-btn">RESET ENVIRONMENT</button>
+    <button id="reset-btn" style="background: #475569;">RESET LAB</button>
+    <button id="export-btn">EXPORT DATA (CSV)</button>
 
-    <div class="group">
-        <label>Visualization Overlay</label>
-        <select id="view-mode">
-            <option value="cells">Cellular Morphology</option>
-            <option value="cytokines">Cytokine Field (Heatmap)</option>
-            <option value="drugs">Drug Diffusion</option>
-        </select>
+    <div class="section" style="margin-top:10px;">
+        <div id="log-feed">System Ready...</div>
     </div>
 </div>
 
-<div id="main">
-    <div id="header-bar">
-        <div id="stats">
-            <div>Day: <span id="days" class="stat-val">0</span></div>
-            <div>Neurons: <span id="neuron-count" class="stat-val">0</span></div>
-            <div>Toxicity: <span id="tox-level" class="stat-val">0.0</span></div>
-        </div>
-        <div style="font-size: 0.8rem; opacity: 0.6;">v1.0.2 Stable Build</div>
+<div id="main-content">
+    <div id="header-stats">
+        <div class="stat-box"><span class="stat-label">Timeline</span><span id="stat-days" class="stat-value">Day 0</span></div>
+        <div class="stat-box"><span class="stat-label">Viable Neurons</span><span id="stat-neurons" class="stat-value">0</span></div>
+        <div class="stat-box"><span class="stat-label">Inflammation Index</span><span id="stat-tox" class="stat-value">0.00%</span></div>
     </div>
-    
-    <div id="viewport">
+
+    <div id="canvas-container">
         <canvas id="simCanvas"></canvas>
-        <div id="legend">
-            <div class="legend-item"><div class="dot" style="background:#38bdf8"></div> Neuron (Healthy)</div>
-            <div class="legend-item"><div class="dot" style="background:#22c55e"></div> Microglia (Resting)</div>
-            <div class="legend-item"><div class="dot" style="background:#ef4444"></div> Activated Glia</div>
-            <div class="legend-item"><div class="dot" style="background:#a855f7"></div> Malignant Cell</div>
-            <div class="legend-item"><div class="dot" style="background:#eab308"></div> Astrocyte</div>
-        </div>
     </div>
 </div>
 
 <script>
-const config = { gridSize: 100, cellSize: 6, diffRate: 0.15, decay: 0.02 };
+const DIM = 100, ZOOM = 6;
 const canvas = document.getElementById('simCanvas');
 const ctx = canvas.getContext('2d');
-canvas.width = canvas.height = config.gridSize * config.cellSize;
+canvas.width = canvas.height = DIM * ZOOM;
 
 let isRunning = false;
-let frame = 0;
+let frameCount = 0;
 let cells = [];
-let cytokineGrid = Array(config.gridSize).fill().map(() => Array(config.gridSize).fill(0));
-let drugGrid = Array(config.gridSize).fill().map(() => Array(config.gridSize).fill(0));
+let toxGrid = Array(DIM).fill().map(() => Array(DIM).fill(0));
+let drugGrid = Array(DIM).fill().map(() => Array(DIM).fill(0));
+let history = []; // For CSV export
 
 class Cell {
     constructor(x, y, type) {
         this.x = x; this.y = y; this.type = type;
         this.health = 100;
-        this.activated = false;
+        this.reproClock = 0;
     }
 
-    update() {
-        const cx = Math.floor(this.x), cy = Math.floor(this.y);
-        const ageFactor = parseInt(document.getElementById('age-input').value) / 100;
-        
-        if (this.type === 'neuron') {
-            if (cytokineGrid[cx][cy] > 0.3) this.health -= (0.2 + ageFactor);
-            if (drugGrid[cx][cy] > 0.1) this.health += 0.5; // BDNF effect
-            if (this.health < 0) this.health = 0;
-        }
+    update(age, sex, tx, dg) {
+        if (this.health <= 0) return;
+        const fragility = (age / 50) * (sex === 'male' ? 1.1 : 1.0);
 
-        if (this.type === 'microglia') {
-            if (cytokineGrid[cx][cy] > 0.15 || this.health < 50) this.activated = true;
-            if (this.activated) cytokineGrid[cx][cy] = Math.min(1, cytokineGrid[cx][cy] + 0.08);
-            // Drugs can suppress activation
-            if (drugGrid[cx][cy] > 0.4) this.activated = false;
+        if (this.type === 'neuron') {
+            if (tx > 0.2) this.health -= (0.4 * fragility);
+            if (dg > 0.1) this.health = Math.min(100, this.health + 0.8);
         }
 
         if (this.type === 'cancer') {
-            cytokineGrid[cx][cy] = Math.min(1, cytokineGrid[cx][cy] + 0.02);
-            if (Math.random() > 0.995) cells.push(new Cell(this.x + (Math.random()-0.5), this.y + (Math.random()-0.5), 'cancer'));
+            this.reproClock++;
+            if (this.reproClock > 50) { this.reproClock = 0; return 'divide'; }
+            return 'toxic';
         }
+        return null;
     }
 
     draw() {
         if (this.health <= 0) return;
-        let color = '#38bdf8';
-        if (this.type === 'microglia') color = this.activated ? '#ef4444' : '#22c55e';
-        if (this.type === 'cancer') color = '#a855f7';
-        if (this.type === 'astrocyte') color = '#eab308';
-        
-        ctx.fillStyle = color;
+        ctx.fillStyle = this.type === 'neuron' ? '#38bdf8' : (this.type === 'cancer' ? '#a855f7' : '#22c55e');
         ctx.globalAlpha = this.health / 100;
         ctx.beginPath();
-        ctx.arc(this.x * config.cellSize, this.y * config.cellSize, this.type === 'neuron' ? 2.5 : 2, 0, Math.PI*2);
+        ctx.arc(this.x * ZOOM, this.y * ZOOM, 2.2, 0, Math.PI*2);
         ctx.fill();
-        ctx.globalAlpha = 1;
     }
 }
 
-function diffuse(grid) {
-    let next = grid.map(row => [...row]);
-    for (let x = 1; x < config.gridSize - 1; x++) {
-        for (let y = 1; y < config.gridSize - 1; y++) {
-            let avg = (grid[x+1][y] + grid[x-1][y] + grid[x][y+1] + grid[x][y-1]) / 4;
-            next[x][y] = grid[x][y] + config.diffRate * (avg - grid[x][y]);
-            next[x][y] *= (1 - config.decay);
+function diffuse() {
+    let nT = toxGrid.map(r => [...r]), nD = drugGrid.map(r => [...r]);
+    for (let x = 1; x < DIM - 1; x++) {
+        for (let y = 1; y < DIM - 1; y++) {
+            nT[x][y] = (toxGrid[x][y] + 0.1 * ((toxGrid[x+1][y]+toxGrid[x-1][y]+toxGrid[x][y+1]+toxGrid[x][y-1])/4 - toxGrid[x][y])) * 0.98;
+            nD[x][y] = (drugGrid[x][y] + 0.1 * ((drugGrid[x+1][y]+drugGrid[x-1][y]+drugGrid[x][y+1]+drugGrid[x][y-1])/4 - drugGrid[x][y])) * 0.96;
         }
     }
-    return next;
+    toxGrid = nT; drugGrid = nD;
 }
 
-function init() {
-    cells = [];
-    frame = 0;
-    const preset = document.getElementById('preset-select').value;
+function step() {
+    if (!isRunning) return;
     
-    for (let i = 0; i < 600; i++) {
-        let type = 'neuron';
-        if (i > 450) type = 'microglia';
-        if (i > 550) type = 'astrocyte';
-        if (preset === 'glioblastoma' && i > 580) type = 'cancer';
-        
-        cells.push(new Cell(Math.random()*config.gridSize, Math.random()*config.gridSize, type));
-    }
+    // The "Timeline" Logic: Runs the logic loop X times per animation frame
+    const speed = parseInt(document.getElementById('speed-slider').value);
     
-    if (preset === 'alzheimers') {
-        for(let j=0; j<10; j++) cytokineGrid[Math.floor(Math.random()*100)][Math.floor(Math.random()*100)] = 1;
+    for (let s = 0; s < speed; s++) {
+        frameCount++;
+        diffuse();
+        const age = parseInt(document.getElementById('age-input').value);
+        const sex = document.getElementById('sex-input').value;
+
+        let born = [];
+        cells.forEach(c => {
+            const res = c.update(age, sex, toxGrid[Math.floor(c.x)][Math.floor(c.y)], drugGrid[Math.floor(c.x)][Math.floor(c.y)]);
+            if (res === 'toxic') toxGrid[Math.floor(c.x)][Math.floor(c.y)] = Math.min(1, toxGrid[Math.floor(c.x)][Math.floor(c.y)] + 0.05);
+            if (res === 'divide') born.push(new Cell(c.x+(Math.random()-0.5)*2, c.y+(Math.random()-0.5)*2, 'cancer'));
+        });
+        cells.push(...born);
+
+        // Record data every "Day" (30 ticks)
+        if (frameCount % 30 === 0) {
+            history.push({ day: frameCount/30, neurons: cells.filter(c => c.type === 'neuron' && c.health > 0).length });
+        }
     }
+
     render();
+    requestAnimationFrame(step);
+}
+
+function render() {
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw Grids (Combined view)
+    for(let x=0; x<DIM; x++) {
+        for(let y=0; y<DIM; y++) {
+            if(toxGrid[x][y] > 0.05) { ctx.fillStyle = `rgba(239, 68, 68, ${toxGrid[x][y]*0.5})`; ctx.fillRect(x*ZOOM, y*ZOOM, ZOOM, ZOOM); }
+            if(drugGrid[x][y] > 0.05) { ctx.fillStyle = `rgba(56, 189, 248, ${drugGrid[x][y]*0.5})`; ctx.fillRect(x*ZOOM, y*ZOOM, ZOOM, ZOOM); }
+        }
+    }
+    cells.forEach(c => c.draw());
+    
+    const neurons = cells.filter(c => c.type === 'neuron' && c.health > 0).length;
+    document.getElementById('stat-days').innerText = `Day ${Math.floor(frameCount/30)}`;
+    document.getElementById('stat-neurons').innerText = neurons;
+    document.getElementById('stat-tox').innerText = (toxGrid.flat().reduce((a,b)=>a+b,0)/100).toFixed(2) + "%";
 }
 
 canvas.addEventListener('mousedown', (e) => {
     const rect = canvas.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / config.cellSize;
-    const y = (e.clientY - rect.top) / config.cellSize;
-    const mode = document.getElementById('mouse-mode').value;
-    
-    if (mode === 'add_neuron') cells.push(new Cell(x, y, 'neuron'));
-    if (mode === 'add_cancer') cells.push(new Cell(x, y, 'cancer'));
-    if (mode === 'add_microglia') cells.push(new Cell(x, y, 'microglia'));
+    const x = Math.floor((e.clientX - rect.left) / ZOOM), y = Math.floor((e.clientY - rect.top) / ZOOM);
+    const tool = document.getElementById('tool-select').value;
+    if (tool === 'inject') {
+        for(let i=-3; i<=3; i++) for(let j=-3; j<=3; j++) if(x+i>=0 && x+i<DIM && y+j>=0 && y+j<DIM) drugGrid[x+i][y+j] = 2;
+    } else {
+        cells.push(new Cell(x, y, tool.replace('add_', '')));
+    }
+    render();
 });
 
-document.getElementById('inject-btn').addEventListener('click', () => {
-    // Inject into 5 random spots to simulate systemic or localized delivery
-    for(let i=0; i<5; i++) {
-        drugGrid[Math.floor(Math.random()*100)][Math.floor(Math.random()*100)] = 5.0;
-    }
-    console.log("Therapy Injected");
-});
-
-function render() {
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    const view = document.getElementById('view-mode').value;
-
-    if (isRunning) {
-        frame++;
-        cytokineGrid = diffuse(cytokineGrid);
-        drugGrid = diffuse(drugGrid);
-        cells.forEach(c => c.update());
-    }
-
-    // Draw Chemical Layers
-    if (view !== 'cells') {
-        const active = view === 'cytokines' ? cytokineGrid : drugGrid;
-        const color = view === 'cytokines' ? '239, 68, 68' : '56, 189, 248';
-        for (let x = 0; x < config.gridSize; x++) {
-            for (let y = 0; y < config.gridSize; y++) {
-                if (active[x][y] > 0.05) {
-                    ctx.fillStyle = `rgba(${color}, ${active[x][y] * 0.5})`;
-                    ctx.fillRect(x*config.cellSize, y*config.cellSize, config.cellSize, config.cellSize);
-                }
-            }
-        }
-    }
-
-    cells.forEach(c => c.draw());
-
-    // Update Top UI
-    document.getElementById('days').innerText = Math.floor(frame / 60);
-    document.getElementById('neuron-count').innerText = cells.filter(c => c.type === 'neuron' && c.health > 0).length;
-    
-    if (isRunning) requestAnimationFrame(render);
-}
-
-document.getElementById('run-btn').addEventListener('click', (e) => {
+document.getElementById('run-btn').onclick = (e) => {
     isRunning = !isRunning;
-    e.target.innerText = isRunning ? "STOP SIMULATION" : "START SIMULATION";
-    e.target.classList.toggle('stop');
-    if (isRunning) render();
-});
+    e.target.innerText = isRunning ? "PAUSE SIMULATION" : "RESUME SIMULATION";
+    e.target.classList.toggle('active');
+    if (isRunning) step();
+};
 
-document.getElementById('reset-btn').addEventListener('click', () => {
-    isRunning = false;
-    document.getElementById('run-btn').innerText = "START SIMULATION";
-    document.getElementById('run-btn').classList.remove('stop');
-    init();
-});
+document.getElementById('export-btn').onclick = () => {
+    let csv = "Day,NeuronCount\n" + history.map(h => `${h.day},${h.neurons}`).join("\n");
+    let blob = new Blob([csv], { type: 'text/csv' });
+    let url = window.URL.createObjectURL(blob);
+    let a = document.createElement('a'); a.href = url; a.download = 'sim_data.csv'; a.click();
+};
 
-init();
+document.getElementById('reset-btn').onclick = () => {
+    location.reload();
+};
+
+// Initial state
+for(let i=0; i<400; i++) cells.push(new Cell(Math.random()*DIM, Math.random()*DIM, 'neuron'));
+render();
 </script>
 </body>
 </html>
