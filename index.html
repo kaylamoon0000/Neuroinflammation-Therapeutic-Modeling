@@ -2,113 +2,87 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>NeuroTheraSim Pro</title>
+<title>NeuroTheraSim</title>
+
 <style>
-body {
-  margin: 0;
-  font-family: "Inter", sans-serif;
-  background: #0a0f1f;
-  color: #dbe3ff;
-}
-
-#container {
-  display: flex;
-  height: 100vh;
-}
-
-canvas {
-  background: #000;
-  cursor: crosshair;
-}
+body { margin:0; font-family:Arial; background:#0a0f1f; color:#dbe3ff; }
+#container { display:flex; height:100vh; }
+canvas { background:black; cursor:crosshair; }
 
 #ui {
-  width: 360px;
-  background: #121a33;
-  padding: 15px;
-  overflow-y: auto;
+  width:380px;
+  background:#121a33;
+  padding:15px;
+  overflow-y:auto;
 }
 
-h2, h3 {
-  margin-top: 10px;
+button, select, input {
+  width:100%;
+  margin:5px 0;
+  padding:8px;
+  background:#1e2b55;
+  border:none;
+  color:white;
 }
 
-button, input {
-  width: 100%;
-  margin: 6px 0;
-  padding: 8px;
-  background: #1e2b55;
-  border: none;
-  color: white;
-}
+.desc { font-size:12px; opacity:0.7; }
 
-button:hover {
-  background: #2d3f7a;
-}
-
-.desc {
-  font-size: 12px;
-  opacity: 0.7;
-  margin-bottom: 8px;
-}
-
-.slider-label {
-  font-size: 12px;
-  margin-top: 8px;
-}
-
-.metric {
-  font-size: 13px;
-  margin: 5px 0;
-}
+.legend-box { display:flex; align-items:center; margin:4px 0; }
+.color { width:14px; height:14px; margin-right:6px; }
 </style>
 </head>
 
 <body>
-
 <div id="container">
+
 <canvas id="canvas"></canvas>
 
 <div id="ui">
-<h2>NeuroTheraSim Pro</h2>
-<div class="desc">Agent-based CNS simulation with therapeutic modeling.</div>
+<h2>NeuroTheraSim</h2>
 
 <button onclick="toggle()">Play / Pause</button>
 <button onclick="reset()">Reset</button>
 
-<h3>Therapies</h3>
+<h3>Presets</h3>
+<button onclick="preset('healthy')">Healthy</button>
+<button onclick="preset('inflamed')">Neuroinflammation</button>
+<button onclick="preset('degeneration')">Neurodegeneration</button>
+<button onclick="preset('tumor')">Tumor Microenvironment</button>
 
-<button onclick="applyDrug('antiInflammatory')">Anti-inflammatory</button>
-<div class="desc">Diffuses and suppresses inflammation.</div>
+<h3>Drug Application</h3>
+<select id="drugType">
+<option value="anti">Anti-inflammatory</option>
+<option value="growth">Growth Factor</option>
+<option value="toxin">Toxin Clearance</option>
+</select>
 
-<button onclick="applyDrug('growth')">Growth Factor</button>
-<div class="desc">Enhances neuron survival.</div>
+<label>Dose</label>
+<input type="range" id="dose" min="0.5" max="3" step="0.5" value="1.5">
 
-<button onclick="applyDrug('toxinClear')">Toxin Clearance</button>
-<div class="desc">Reduces toxic buildup.</div>
+<label>Radius</label>
+<input type="range" id="radius" min="1" max="8" value="3">
 
-<h3>Interaction</h3>
-<div class="desc">Click canvas to place selected cell type.</div>
+<div class="desc">Click = therapy | Shift+Click = place cells</div>
 
+<h3>Cells</h3>
 <select id="cellType">
 <option value="neuron">Neuron</option>
 <option value="microglia">Microglia</option>
 <option value="astrocyte">Astrocyte</option>
+<option value="tumor">Tumor</option>
 <option value="erase">Erase</option>
 </select>
 
-<h3>Parameters</h3>
+<h3>Legend</h3>
+<div class="legend-box"><div class="color" style="background:cyan"></div>Neuron</div>
+<div class="legend-box"><div class="color" style="background:red"></div>Microglia</div>
+<div class="legend-box"><div class="color" style="background:lime"></div>Astrocyte</div>
+<div class="legend-box"><div class="color" style="background:yellow"></div>Tumor</div>
 
-<div class="slider-label">Diffusion Rate</div>
-<input type="range" min="0.01" max="0.3" step="0.01" id="diffusion" value="0.1">
+<div class="desc">Background = fields (R=inflammation, G=growth, B=toxicity)</div>
 
-<div class="slider-label">Inflammation Damage</div>
-<input type="range" min="0" max="1" step="0.05" id="damage" value="0.3">
-
-<div class="slider-label">Growth Healing</div>
-<input type="range" min="0" max="1" step="0.05" id="healing" value="0.2">
-
-<h3>Metrics</h3>
-<div id="metrics"></div>
+<h3>Inspector</h3>
+<div id="inspect"></div>
 
 </div>
 </div>
@@ -117,89 +91,75 @@ button:hover {
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 
-canvas.width = window.innerWidth - 360;
+canvas.width = window.innerWidth - 380;
 canvas.height = window.innerHeight;
 
-const SIZE = 100;
+const SIZE = 90;
 const cellSize = canvas.width / SIZE;
 
 let running = false;
+let grid = [], fields = [];
 
-let grid = [];
-let fields = [];
-let drugs = [];
+// 🔒 Stability clamp
+function clamp(v, min=0, max=5){
+  if (!isFinite(v) || isNaN(v)) return 0;
+  return Math.max(min, Math.min(max, v));
+}
 
-function createField() {
-  return {
-    inflammation: 0,
-    growth: 0,
-    toxicity: 0
-  };
+function createField(){
+  return {inflammation:0, growth:0, toxicity:0};
 }
 
 class Cell {
-  constructor(type) {
+  constructor(type){
     this.type = type;
     this.health = 100;
   }
 
-  update(x, y) {
-    let env = fields[x][y];
+  update(x,y){
+    let f = fields[x][y];
 
-    let damage = parseFloat(document.getElementById("damage").value);
-    let healing = parseFloat(document.getElementById("healing").value);
+    if(this.type==="neuron"){
+      this.health -= clamp(f.inflammation)*0.25;
+      this.health -= clamp(f.toxicity)*0.3;
+      this.health += clamp(f.growth)*0.15;
 
-    if (this.type === "neuron") {
-      this.health -= env.inflammation * damage;
-      this.health -= env.toxicity * 0.4;
-      this.health += env.growth * healing;
+      this.health = clamp(this.health,0,100);
 
-      if (this.health <= 0) {
-        grid[x][y] = null;
-        env.toxicity += 3;
+      if(this.health<=0){
+        grid[x][y]=null;
+        f.toxicity = clamp(f.toxicity + 1);
       }
     }
 
-    if (this.type === "astrocyte") {
-      env.growth += 0.2;
-      env.inflammation *= 0.97;
+    if(this.type==="astrocyte"){
+      f.growth = clamp(f.growth + 0.15);
+      f.inflammation = clamp(f.inflammation * 0.97);
     }
 
-    if (this.type === "microglia") {
-      // move toward inflammation gradient
-      let best = [x,y];
-      let maxInf = env.inflammation;
+    if(this.type==="microglia"){
+      f.toxicity = clamp(f.toxicity - 0.2);
+      f.inflammation = clamp(f.inflammation + 0.15);
+    }
 
-      for (let dx=-1;dx<=1;dx++){
-        for (let dy=-1;dy<=1;dy++){
-          let nx=x+dx, ny=y+dy;
-          if(nx>=0&&ny>=0&&nx<SIZE&&ny<SIZE){
-            if(fields[nx][ny].inflammation > maxInf){
-              maxInf = fields[nx][ny].inflammation;
-              best=[nx,ny];
-            }
-          }
+    if(this.type==="tumor"){
+      f.inflammation = clamp(f.inflammation + 0.3);
+
+      if(Math.random()<0.02){
+        let nx=x+Math.floor(Math.random()*3)-1;
+        let ny=y+Math.floor(Math.random()*3)-1;
+        if(grid[nx]?.[ny]==null){
+          grid[nx][ny]=new Cell("tumor");
         }
       }
-
-      if (best[0] !== x || best[1] !== y) {
-        grid[best[0]][best[1]] = this;
-        grid[x][y] = null;
-      }
-
-      env.toxicity -= 0.3;
-      env.inflammation += 0.2;
     }
   }
 }
 
-function init() {
-  grid = [];
-  fields = [];
-
-  for (let x=0;x<SIZE;x++){
-    grid[x]=[];
-    fields[x]=[];
+function init(){
+  grid=[]; fields=[];
+  for(let x=0;x<SIZE;x++){
+    grid[x]=[]; fields[x]=[];
     for(let y=0;y<SIZE;y++){
       let r=Math.random();
       if(r<0.1) grid[x][y]=new Cell("neuron");
@@ -212,22 +172,44 @@ function init() {
   }
 }
 
-function diffuse() {
-  let rate = parseFloat(document.getElementById("diffusion").value);
+function preset(type){
+  init();
+  for(let x=0;x<SIZE;x++){
+    for(let y=0;y<SIZE;y++){
+      let f=fields[x][y];
+
+      if(type==="inflamed") f.inflammation=2;
+
+      if(type==="degeneration"){
+        f.toxicity=1.5;
+        if(grid[x][y]?.type==="neuron") grid[x][y].health=60;
+      }
+
+      if(type==="tumor"){
+        if(Math.random()<0.05) grid[x][y]=new Cell("tumor");
+      }
+    }
+  }
+}
+
+// 🔬 Stable diffusion
+function diffuse(){
+  let rate = 0.08;
   let newF = JSON.parse(JSON.stringify(fields));
 
-  for (let x=1;x<SIZE-1;x++){
-    for (let y=1;y<SIZE-1;y++){
-      for (let key in fields[x][y]) {
-        let val = fields[x][y][key];
-        let sum = 0;
+  for(let x=1;x<SIZE-1;x++){
+    for(let y=1;y<SIZE-1;y++){
+      for(let k in fields[x][y]){
+        let val = fields[x][y][k];
 
-        sum += fields[x+1][y][key];
-        sum += fields[x-1][y][key];
-        sum += fields[x][y+1][key];
-        sum += fields[x][y-1][key];
+        let sum =
+          fields[x+1][y][k] +
+          fields[x-1][y][k] +
+          fields[x][y+1][k] +
+          fields[x][y-1][k];
 
-        newF[x][y][key] = val + rate * (sum - 4*val);
+        let next = val + rate*(sum - 4*val);
+        newF[x][y][k] = clamp(next);
       }
     }
   }
@@ -235,95 +217,97 @@ function diffuse() {
   fields = newF;
 }
 
-function updateDrugs() {
-  for (let d of drugs) {
-    fields[d.x][d.y][d.type] += d.strength;
-    d.strength *= 0.97;
-  }
-}
-
-function applyDrug(type) {
-  for (let i=0;i<200;i++){
-    drugs.push({
-      x: Math.floor(Math.random()*SIZE),
-      y: Math.floor(Math.random()*SIZE),
-      type: type==="antiInflammatory"?"inflammation":
-            type==="growth"?"growth":"toxicity",
-      strength: 2
-    });
-  }
-}
-
-function step() {
+function step(){
   diffuse();
-  updateDrugs();
 
-  for (let x=0;x<SIZE;x++){
-    for (let y=0;y<SIZE;y++){
-      let c = grid[x][y];
-      if(c) c.update(x,y);
+  for(let x=0;x<SIZE;x++){
+    for(let y=0;y<SIZE;y++){
+      if(grid[x][y]) grid[x][y].update(x,y);
     }
   }
 }
 
-function draw() {
-  for (let x=0;x<SIZE;x++){
-    for (let y=0;y<SIZE;y++){
-      let f = fields[x][y];
+// 🎨 Rendering
+function draw(){
+  for(let x=0;x<SIZE;x++){
+    for(let y=0;y<SIZE;y++){
 
-      let r = Math.min(255, f.inflammation*80);
-      let g = Math.min(255, f.growth*80);
-      let b = Math.min(255, f.toxicity*80);
+      let f=fields[x][y];
+
+      let r = clamp(f.inflammation)*80;
+      let g = clamp(f.growth)*80;
+      let b = clamp(f.toxicity)*80;
 
       ctx.fillStyle=`rgb(${r},${g},${b})`;
       ctx.fillRect(x*cellSize,y*cellSize,cellSize,cellSize);
 
-      let c = grid[x][y];
+      let c=grid[x][y];
       if(c){
         if(c.type==="neuron") ctx.fillStyle="cyan";
         if(c.type==="microglia") ctx.fillStyle="red";
         if(c.type==="astrocyte") ctx.fillStyle="lime";
+        if(c.type==="tumor") ctx.fillStyle="yellow";
+
         ctx.fillRect(x*cellSize+2,y*cellSize+2,cellSize-4,cellSize-4);
       }
     }
   }
 }
 
-function metrics() {
-  let n=0, h=0, inf=0;
+// 🧪 Interaction
+canvas.addEventListener("click",e=>{
+  let rect=canvas.getBoundingClientRect();
+  let x=Math.floor((e.clientX-rect.left)/cellSize);
+  let y=Math.floor((e.clientY-rect.top)/cellSize);
 
-  for (let x=0;x<SIZE;x++){
-    for (let y=0;y<SIZE;y++){
-      if(grid[x][y]?.type==="neuron"){
-        n++;
-        h+=grid[x][y].health;
+  if(e.shiftKey){
+    let type=document.getElementById("cellType").value;
+    if(type==="erase") grid[x][y]=null;
+    else grid[x][y]=new Cell(type);
+  } else {
+    let type=document.getElementById("drugType").value;
+    let dose=parseFloat(document.getElementById("dose").value);
+    let rad=parseInt(document.getElementById("radius").value);
+
+    for(let dx=-rad;dx<=rad;dx++){
+      for(let dy=-rad;dy<=rad;dy++){
+        let nx=x+dx, ny=y+dy;
+
+        if(fields[nx]?.[ny]){
+          if(type==="anti")
+            fields[nx][ny].inflammation = clamp(fields[nx][ny].inflammation * (1 - 0.2*dose));
+
+          if(type==="growth")
+            fields[nx][ny].growth = clamp(fields[nx][ny].growth + 0.5*dose);
+
+          if(type==="toxin")
+            fields[nx][ny].toxicity = clamp(fields[nx][ny].toxicity * (1 - 0.3*dose));
+        }
       }
-      inf+=fields[x][y].inflammation;
     }
   }
+});
 
-  document.getElementById("metrics").innerHTML =
-    `Neurons: ${n}<br>
-     Avg Health: ${n?(h/n).toFixed(1):0}<br>
-     Inflammation: ${inf.toFixed(1)}`;
-}
+// 🔍 Inspector
+canvas.addEventListener("mousemove",e=>{
+  let rect=canvas.getBoundingClientRect();
+  let x=Math.floor((e.clientX-rect.left)/cellSize);
+  let y=Math.floor((e.clientY-rect.top)/cellSize);
 
-canvas.addEventListener("click", e=>{
-  let rect = canvas.getBoundingClientRect();
-  let x = Math.floor((e.clientX-rect.left)/cellSize);
-  let y = Math.floor((e.clientY-rect.top)/cellSize);
+  let c=grid[x]?.[y];
+  let f=fields[x]?.[y];
 
-  let type = document.getElementById("cellType").value;
-
-  if(type==="erase") grid[x][y]=null;
-  else grid[x][y]=new Cell(type);
+  document.getElementById("inspect").innerHTML =
+    `Cell: ${c?c.type:"None"}<br>
+     Inflammation: ${f.inflammation.toFixed(2)}<br>
+     Growth: ${f.growth.toFixed(2)}<br>
+     Toxicity: ${f.toxicity.toFixed(2)}`;
 });
 
 function loop(){
   if(running){
     step();
     draw();
-    metrics();
   }
   requestAnimationFrame(loop);
 }
@@ -334,6 +318,5 @@ function reset(){ init(); }
 init();
 loop();
 </script>
-
 </body>
 </html>
