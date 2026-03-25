@@ -7,15 +7,8 @@
 <style>
 body { margin:0; display:flex; background:#0b1020; color:white; font-family:Arial;}
 #left { flex:1; position:relative; }
-#right {
-  width:320px;
-  background:#121a33;
-  padding:12px;
-  overflow-y:auto;
-}
+#right { width:320px; background:#121a33; padding:12px; overflow-y:auto; }
 canvas { display:block; background:black; }
-
-h3 { margin-top:10px; }
 
 button, select, input {
   width:100%;
@@ -25,18 +18,6 @@ button, select, input {
   border:none;
   color:white;
 }
-
-.legend div { display:flex; align-items:center; font-size:12px; }
-.box { width:12px; height:12px; margin-right:5px; }
-
-#graph {
-  position:absolute;
-  bottom:0;
-  left:0;
-  width:100%;
-  height:120px;
-  background:#000;
-}
 </style>
 </head>
 
@@ -44,167 +25,90 @@ button, select, input {
 
 <div id="left">
 <canvas id="sim"></canvas>
-<canvas id="graph"></canvas>
+<canvas id="graph" style="position:absolute;bottom:0;height:120px;"></canvas>
 </div>
 
 <div id="right">
 
 <h2>NeuroTheraSim</h2>
 
-<button id="toggleBtn">Play / Pause</button>
-<button id="resetBtn">Reset</button>
+<button id="toggle">Play / Pause</button>
+<button id="reset">Reset</button>
 
 <h3>Presets</h3>
-<button data-preset="healthy">Healthy</button>
-<button data-preset="inflamed">Inflammation</button>
-<button data-preset="degeneration">Degeneration</button>
-<button data-preset="tumor">Tumor</button>
+<button data-p="healthy">Healthy</button>
+<button data-p="inflamed">Inflammation</button>
+<button data-p="degeneration">Degeneration</button>
+<button data-p="tumor">Tumor</button>
 
 <h3>Drug</h3>
 <select id="drug">
-<option value="il10">IL-10 (Anti-inflammatory)</option>
-<option value="bdnf">BDNF (Growth)</option>
-<option value="nac">NAC (Detox)</option>
-<option value="tmz">Temozolomide (Tumor)</option>
+<option value="il10">IL-10</option>
+<option value="bdnf">BDNF</option>
+<option value="nac">NAC</option>
+<option value="tmz">Temozolomide</option>
 </select>
 
 Dose <input type="range" id="dose" min="0.1" max="2" step="0.1" value="1">
 Radius <input type="range" id="radius" min="1" max="8" value="3">
 
-<h3>Gene Expression</h3>
-Receptor <input type="range" id="rec" min="0.5" max="2" step="0.1" value="1">
-Inflammation Sensitivity <input type="range" id="infl" min="0.5" max="2" step="0.1" value="1">
-Toxicity Resistance <input type="range" id="tox" min="0.5" max="2" step="0.1" value="1">
-
-<h3>Cell Placement</h3>
+<h3>Cell Placement (SHIFT+CLICK)</h3>
 <select id="cell">
 <option value="neuron">Neuron</option>
 <option value="tumor">Tumor</option>
 <option value="erase">Erase</option>
 </select>
 
-<h3>Legend</h3>
-<div class="legend">
-<div><div class="box" style="background:cyan"></div>Neuron</div>
-<div><div class="box" style="background:white"></div>Firing neuron</div>
-<div><div class="box" style="background:yellow"></div>Tumor</div>
-<div><div class="box" style="background:red"></div>Inflammation</div>
-<div><div class="box" style="background:green"></div>Growth</div>
-<div><div class="box" style="background:blue"></div>Toxicity</div>
-</div>
-
-<h3>Save</h3>
-<button id="saveBtn">Save</button>
-<button id="loadBtn">Load</button>
-
 </div>
 
 <script>
 
-// ===== SETUP =====
-const SIZE = 80;
+// ===== CANVAS FIX =====
 const sim = document.getElementById("sim");
 const ctx = sim.getContext("2d");
 const graph = document.getElementById("graph");
 const gctx = graph.getContext("2d");
 
-sim.width = window.innerWidth - 320;
-sim.height = window.innerHeight;
-graph.width = sim.width;
-graph.height = 120;
+function resize(){
+  sim.width = window.innerWidth - 320;
+  sim.height = window.innerHeight;
+  graph.width = sim.width;
+  graph.height = 120;
+}
+resize();
+window.addEventListener("resize", resize);
 
-const cellSize = sim.width / SIZE;
-
-// UI elements
-const dose = document.getElementById("dose");
-const radius = document.getElementById("radius");
-const drug = document.getElementById("drug");
-const rec = document.getElementById("rec");
-const infl = document.getElementById("infl");
-const tox = document.getElementById("tox");
-const cellSelect = document.getElementById("cell");
+// ===== CONSTANTS =====
+const SIZE = 60;
+let cellSize;
 
 // ===== STATE =====
-let grid = [], field = [], running = false, history = [];
-
-// ===== UTIL =====
-function clamp(v, min=0, max=3){
-  if(!isFinite(v)) return 0;
-  return Math.max(min, Math.min(max, v));
-}
-
-// ===== CELL =====
-class Cell {
-  constructor(type){
-    this.type = type;
-    this.health = 1;
-    this.fire = 0;
-  }
-
-  update(x,y){
-    let f = field[x][y];
-
-    let growth = f.g/(1+f.g);
-    let inflVal = f.i/(1+f.i);
-    let toxVal = f.t/(1+f.t);
-
-    if(this.type==="neuron"){
-      this.health += rec.value*(growth*0.025)
-                   - infl.value*(inflVal*0.035)
-                   - (toxVal*0.03)/tox.value;
-
-      this.health = clamp(this.health,0,1);
-
-      if(this.health>0.7 && Math.random()<0.1){
-        this.fire = 1;
-        f.g += 0.05;
-      } else this.fire = 0;
-
-      if(this.health<=0){
-        grid[x][y]=null;
-        f.t += 0.3;
-      }
-    }
-
-    if(this.type==="tumor"){
-      f.i += 0.05;
-
-      if(Math.random()<0.02){
-        let nx=x+Math.floor(Math.random()*3)-1;
-        let ny=y+Math.floor(Math.random()*3)-1;
-        if(grid[nx]?.[ny]==null){
-          grid[nx][ny] = new Cell("tumor");
-        }
-      }
-    }
-  }
-}
+let grid = [], field = [], running=false, history=[];
 
 // ===== INIT =====
 function init(){
   grid=[]; field=[]; history=[];
+  cellSize = sim.width / SIZE;
+
   for(let x=0;x<SIZE;x++){
     grid[x]=[]; field[x]=[];
     for(let y=0;y<SIZE;y++){
-      grid[x][y]=Math.random()<0.1?new Cell("neuron"):null;
+      grid[x][y]=Math.random()<0.1?{type:"neuron",h:1,f:0}:null;
       field[x][y]={i:0,g:0,t:0};
     }
   }
 }
+init();
 
 // ===== PRESETS =====
-function applyPreset(p){
+function preset(p){
   init();
   for(let x=0;x<SIZE;x++){
     for(let y=0;y<SIZE;y++){
       if(p==="inflamed") field[x][y].i=2;
-      if(p==="degeneration"){
-        field[x][y].t=1.5;
-        if(grid[x][y]) grid[x][y].health=0.5;
-      }
-      if(p==="tumor" && Math.random()<0.07){
-        grid[x][y]=new Cell("tumor");
-        field[x][y].i=1;
+      if(p==="degeneration"){ field[x][y].t=1.5; }
+      if(p==="tumor" && Math.random()<0.1){
+        grid[x][y]={type:"tumor",h:1,f:0};
       }
     }
   }
@@ -220,7 +124,7 @@ function diffuse(){
       for(let k of ["i","g","t"]){
         let v=field[x][y][k];
         let s=field[x+1][y][k]+field[x-1][y][k]+field[x][y+1][k]+field[x][y-1][k];
-        nf[x][y][k]=clamp(v+r*(s-4*v));
+        nf[x][y][k]=Math.max(0,Math.min(3,v+r*(s-4*v)));
       }
     }
   }
@@ -233,7 +137,29 @@ function step(){
 
   for(let x=0;x<SIZE;x++){
     for(let y=0;y<SIZE;y++){
-      if(grid[x][y]) grid[x][y].update(x,y);
+      let c=grid[x][y];
+      let f=field[x][y];
+      if(!c) continue;
+
+      if(c.type==="neuron"){
+        c.h += f.g*0.02 - f.i*0.03 - f.t*0.03;
+        c.h=Math.max(0,Math.min(1,c.h));
+
+        if(c.h>0.7 && Math.random()<0.1){
+          c.f=1; f.g+=0.05;
+        } else c.f=0;
+
+        if(c.h<=0){ grid[x][y]=null; f.t+=0.3; }
+      }
+
+      if(c.type==="tumor"){
+        f.i+=0.05;
+        if(Math.random()<0.02){
+          let nx=x+Math.floor(Math.random()*3)-1;
+          let ny=y+Math.floor(Math.random()*3)-1;
+          if(grid[nx]?.[ny]==null) grid[nx][ny]={type:"tumor",h:1,f:0};
+        }
+      }
     }
   }
 
@@ -250,6 +176,8 @@ function step(){
 
 // ===== DRAW =====
 function draw(){
+  ctx.clearRect(0,0,sim.width,sim.height);
+
   for(let x=0;x<SIZE;x++){
     for(let y=0;y<SIZE;y++){
       let f=field[x][y];
@@ -259,7 +187,7 @@ function draw(){
 
       let c=grid[x][y];
       if(c){
-        ctx.fillStyle=c.type==="neuron"?(c.fire?"white":"cyan"):"yellow";
+        ctx.fillStyle=c.type==="neuron"?(c.f?"white":"cyan"):"yellow";
         ctx.fillRect(x*cellSize+2,y*cellSize+2,cellSize-4,cellSize-4);
       }
     }
@@ -272,28 +200,30 @@ function drawGraph(){
   gctx.beginPath();
 
   history.forEach((v,i)=>{
-    gctx.lineTo(i, graph.height - v*1.2);
+    gctx.lineTo(i, graph.height - v);
   });
 
   gctx.strokeStyle="cyan";
   gctx.stroke();
 }
 
-// ===== DRUG APPLICATION =====
+// ===== CLICK INTERACTION (FIXED) =====
 sim.addEventListener("click", e=>{
   let rect=sim.getBoundingClientRect();
   let x=Math.floor((e.clientX-rect.left)/cellSize);
   let y=Math.floor((e.clientY-rect.top)/cellSize);
 
   if(e.shiftKey){
-    let type=cellSelect.value;
+    let type=document.getElementById("cell").value;
     if(type==="erase") grid[x][y]=null;
-    else grid[x][y]=new Cell(type);
+    else grid[x][y]={type:type,h:1,f:0};
+    draw(); // instant feedback
     return;
   }
 
-  let d=parseFloat(dose.value);
-  let r=parseInt(radius.value);
+  let d=parseFloat(document.getElementById("dose").value);
+  let r=parseInt(document.getElementById("radius").value);
+  let drug=document.getElementById("drug").value;
 
   for(let dx=-r;dx<=r;dx++){
     for(let dy=-r;dy<=r;dy++){
@@ -301,33 +231,26 @@ sim.addEventListener("click", e=>{
       if(field[nx]?.[ny]){
         let f=field[nx][ny];
 
-        if(drug.value==="il10") f.i *= Math.exp(-0.4*d);
-        if(drug.value==="bdnf") f.g += 0.3*d;
-        if(drug.value==="nac") f.t *= Math.exp(-0.4*d);
-        if(drug.value==="tmz"){
+        if(drug==="il10") f.i*=Math.exp(-0.4*d);
+        if(drug==="bdnf") f.g+=0.3*d;
+        if(drug==="nac") f.t*=Math.exp(-0.4*d);
+        if(drug==="tmz"){
           if(grid[nx][ny]?.type==="tumor") grid[nx][ny]=null;
         }
       }
     }
   }
+
+  draw(); // instant feedback
 });
 
-// ===== CONTROLS =====
-document.getElementById("toggleBtn").onclick = ()=> running=!running;
-document.getElementById("resetBtn").onclick = init;
+// ===== BUTTONS (EXPLICIT FIX) =====
+document.getElementById("toggle").onclick=()=>running=!running;
+document.getElementById("reset").onclick=()=>{init(); draw();};
 
-document.querySelectorAll("[data-preset]").forEach(btn=>{
-  btn.onclick = ()=> applyPreset(btn.dataset.preset);
+document.querySelectorAll("[data-p]").forEach(b=>{
+  b.onclick=()=>{preset(b.dataset.p); draw();};
 });
-
-document.getElementById("saveBtn").onclick = ()=>{
-  localStorage.setItem("sim", JSON.stringify({grid,field}));
-};
-
-document.getElementById("loadBtn").onclick = ()=>{
-  let d=JSON.parse(localStorage.getItem("sim"));
-  if(d){ grid=d.grid; field=d.field; }
-};
 
 // ===== LOOP =====
 function loop(){
@@ -339,7 +262,7 @@ function loop(){
   requestAnimationFrame(loop);
 }
 
-init();
+draw();
 loop();
 
 </script>
