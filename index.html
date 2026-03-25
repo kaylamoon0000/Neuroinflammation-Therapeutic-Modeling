@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>NeuroTheraSim Pro</title>
+<style>
+body {
+  margin: 0;
+  font-family: "Inter", sans-serif;
+  background: #0a0f1f;
+  color: #dbe3ff;
+}
+
+#container {
+  display: flex;
+  height: 100vh;
+}
+
+canvas {
+  background: #000;
+  cursor: crosshair;
+}
+
+#ui {
+  width: 360px;
+  background: #121a33;
+  padding: 15px;
+  overflow-y: auto;
+}
+
+h2, h3 {
+  margin-top: 10px;
+}
+
+button, input {
+  width: 100%;
+  margin: 6px 0;
+  padding: 8px;
+  background: #1e2b55;
+  border: none;
+  color: white;
+}
+
+button:hover {
+  background: #2d3f7a;
+}
+
+.desc {
+  font-size: 12px;
+  opacity: 0.7;
+  margin-bottom: 8px;
+}
+
+.slider-label {
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.metric {
+  font-size: 13px;
+  margin: 5px 0;
+}
+</style>
+</head>
+
+<body>
+
+<div id="container">
+<canvas id="canvas"></canvas>
+
+<div id="ui">
+<h2>NeuroTheraSim Pro</h2>
+<div class="desc">Agent-based CNS simulation with therapeutic modeling.</div>
+
+<button onclick="toggle()">Play / Pause</button>
+<button onclick="reset()">Reset</button>
+
+<h3>Therapies</h3>
+
+<button onclick="applyDrug('antiInflammatory')">Anti-inflammatory</button>
+<div class="desc">Diffuses and suppresses inflammation.</div>
+
+<button onclick="applyDrug('growth')">Growth Factor</button>
+<div class="desc">Enhances neuron survival.</div>
+
+<button onclick="applyDrug('toxinClear')">Toxin Clearance</button>
+<div class="desc">Reduces toxic buildup.</div>
+
+<h3>Interaction</h3>
+<div class="desc">Click canvas to place selected cell type.</div>
+
+<select id="cellType">
+<option value="neuron">Neuron</option>
+<option value="microglia">Microglia</option>
+<option value="astrocyte">Astrocyte</option>
+<option value="erase">Erase</option>
+</select>
+
+<h3>Parameters</h3>
+
+<div class="slider-label">Diffusion Rate</div>
+<input type="range" min="0.01" max="0.3" step="0.01" id="diffusion" value="0.1">
+
+<div class="slider-label">Inflammation Damage</div>
+<input type="range" min="0" max="1" step="0.05" id="damage" value="0.3">
+
+<div class="slider-label">Growth Healing</div>
+<input type="range" min="0" max="1" step="0.05" id="healing" value="0.2">
+
+<h3>Metrics</h3>
+<div id="metrics"></div>
+
+</div>
+</div>
+
+<script>
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+canvas.width = window.innerWidth - 360;
+canvas.height = window.innerHeight;
+
+const SIZE = 100;
+const cellSize = canvas.width / SIZE;
+
+let running = false;
+
+let grid = [];
+let fields = [];
+let drugs = [];
+
+function createField() {
+  return {
+    inflammation: 0,
+    growth: 0,
+    toxicity: 0
+  };
+}
+
+class Cell {
+  constructor(type) {
+    this.type = type;
+    this.health = 100;
+  }
+
+  update(x, y) {
+    let env = fields[x][y];
+
+    let damage = parseFloat(document.getElementById("damage").value);
+    let healing = parseFloat(document.getElementById("healing").value);
+
+    if (this.type === "neuron") {
+      this.health -= env.inflammation * damage;
+      this.health -= env.toxicity * 0.4;
+      this.health += env.growth * healing;
+
+      if (this.health <= 0) {
+        grid[x][y] = null;
+        env.toxicity += 3;
+      }
+    }
+
+    if (this.type === "astrocyte") {
+      env.growth += 0.2;
+      env.inflammation *= 0.97;
+    }
+
+    if (this.type === "microglia") {
+      // move toward inflammation gradient
+      let best = [x,y];
+      let maxInf = env.inflammation;
+
+      for (let dx=-1;dx<=1;dx++){
+        for (let dy=-1;dy<=1;dy++){
+          let nx=x+dx, ny=y+dy;
+          if(nx>=0&&ny>=0&&nx<SIZE&&ny<SIZE){
+            if(fields[nx][ny].inflammation > maxInf){
+              maxInf = fields[nx][ny].inflammation;
+              best=[nx,ny];
+            }
+          }
+        }
+      }
+
+      if (best[0] !== x || best[1] !== y) {
+        grid[best[0]][best[1]] = this;
+        grid[x][y] = null;
+      }
+
+      env.toxicity -= 0.3;
+      env.inflammation += 0.2;
+    }
+  }
+}
+
+function init() {
+  grid = [];
+  fields = [];
+
+  for (let x=0;x<SIZE;x++){
+    grid[x]=[];
+    fields[x]=[];
+    for(let y=0;y<SIZE;y++){
+      let r=Math.random();
+      if(r<0.1) grid[x][y]=new Cell("neuron");
+      else if(r<0.15) grid[x][y]=new Cell("microglia");
+      else if(r<0.2) grid[x][y]=new Cell("astrocyte");
+      else grid[x][y]=null;
+
+      fields[x][y]=createField();
+    }
+  }
+}
+
+function diffuse() {
+  let rate = parseFloat(document.getElementById("diffusion").value);
+  let newF = JSON.parse(JSON.stringify(fields));
+
+  for (let x=1;x<SIZE-1;x++){
+    for (let y=1;y<SIZE-1;y++){
+      for (let key in fields[x][y]) {
+        let val = fields[x][y][key];
+        let sum = 0;
+
+        sum += fields[x+1][y][key];
+        sum += fields[x-1][y][key];
+        sum += fields[x][y+1][key];
+        sum += fields[x][y-1][key];
+
+        newF[x][y][key] = val + rate * (sum - 4*val);
+      }
+    }
+  }
+
+  fields = newF;
+}
+
+function updateDrugs() {
+  for (let d of drugs) {
+    fields[d.x][d.y][d.type] += d.strength;
+    d.strength *= 0.97;
+  }
+}
+
+function applyDrug(type) {
+  for (let i=0;i<200;i++){
+    drugs.push({
+      x: Math.floor(Math.random()*SIZE),
+      y: Math.floor(Math.random()*SIZE),
+      type: type==="antiInflammatory"?"inflammation":
+            type==="growth"?"growth":"toxicity",
+      strength: 2
+    });
+  }
+}
+
+function step() {
+  diffuse();
+  updateDrugs();
+
+  for (let x=0;x<SIZE;x++){
+    for (let y=0;y<SIZE;y++){
+      let c = grid[x][y];
+      if(c) c.update(x,y);
+    }
+  }
+}
+
+function draw() {
+  for (let x=0;x<SIZE;x++){
+    for (let y=0;y<SIZE;y++){
+      let f = fields[x][y];
+
+      let r = Math.min(255, f.inflammation*80);
+      let g = Math.min(255, f.growth*80);
+      let b = Math.min(255, f.toxicity*80);
+
+      ctx.fillStyle=`rgb(${r},${g},${b})`;
+      ctx.fillRect(x*cellSize,y*cellSize,cellSize,cellSize);
+
+      let c = grid[x][y];
+      if(c){
+        if(c.type==="neuron") ctx.fillStyle="cyan";
+        if(c.type==="microglia") ctx.fillStyle="red";
+        if(c.type==="astrocyte") ctx.fillStyle="lime";
+        ctx.fillRect(x*cellSize+2,y*cellSize+2,cellSize-4,cellSize-4);
+      }
+    }
+  }
+}
+
+function metrics() {
+  let n=0, h=0, inf=0;
+
+  for (let x=0;x<SIZE;x++){
+    for (let y=0;y<SIZE;y++){
+      if(grid[x][y]?.type==="neuron"){
+        n++;
+        h+=grid[x][y].health;
+      }
+      inf+=fields[x][y].inflammation;
+    }
+  }
+
+  document.getElementById("metrics").innerHTML =
+    `Neurons: ${n}<br>
+     Avg Health: ${n?(h/n).toFixed(1):0}<br>
+     Inflammation: ${inf.toFixed(1)}`;
+}
+
+canvas.addEventListener("click", e=>{
+  let rect = canvas.getBoundingClientRect();
+  let x = Math.floor((e.clientX-rect.left)/cellSize);
+  let y = Math.floor((e.clientY-rect.top)/cellSize);
+
+  let type = document.getElementById("cellType").value;
+
+  if(type==="erase") grid[x][y]=null;
+  else grid[x][y]=new Cell(type);
+});
+
+function loop(){
+  if(running){
+    step();
+    draw();
+    metrics();
+  }
+  requestAnimationFrame(loop);
+}
+
+function toggle(){ running=!running; }
+function reset(){ init(); }
+
+init();
+loop();
+</script>
+
+</body>
+</html>
