@@ -8,6 +8,7 @@
 body { margin:0; display:flex; background:#0b1020; color:white; font-family:Arial;}
 #left { flex:1; position:relative; }
 #right { width:320px; background:#121a33; padding:12px; overflow-y:auto; }
+
 canvas { display:block; background:black; }
 
 button, select, input {
@@ -18,6 +19,16 @@ button, select, input {
   border:none;
   color:white;
 }
+
+#graph {
+  position:absolute;
+  bottom:0;
+  left:0;
+  height:120px;
+}
+
+.legend div { display:flex; font-size:12px; }
+.box { width:12px; height:12px; margin-right:5px; }
 </style>
 </head>
 
@@ -25,7 +36,7 @@ button, select, input {
 
 <div id="left">
 <canvas id="sim"></canvas>
-<canvas id="graph" style="position:absolute;bottom:0;height:120px;"></canvas>
+<canvas id="graph"></canvas>
 </div>
 
 <div id="right">
@@ -41,228 +52,242 @@ button, select, input {
 <button data-p="degeneration">Degeneration</button>
 <button data-p="tumor">Tumor</button>
 
-<h3>Drug</h3>
+<h3>Therapies</h3>
 <select id="drug">
 <option value="il10">IL-10</option>
 <option value="bdnf">BDNF</option>
 <option value="nac">NAC</option>
 <option value="tmz">Temozolomide</option>
+<option value="stem">Stem Cells</option>
+<option value="immune">Immunotherapy</option>
 </select>
 
 Dose <input type="range" id="dose" min="0.1" max="2" step="0.1" value="1">
 Radius <input type="range" id="radius" min="1" max="8" value="3">
 
-<h3>Cell Placement (SHIFT+CLICK)</h3>
-<select id="cell">
-<option value="neuron">Neuron</option>
-<option value="tumor">Tumor</option>
-<option value="erase">Erase</option>
+<h3>Environment</h3>
+Age <input type="range" id="age" min="20" max="90" value="40">
+Sex 
+<select id="sex">
+<option value="male">Male</option>
+<option value="female">Female</option>
 </select>
+
+<h3>Data</h3>
+<div id="stats"></div>
+
+<h3>Legend</h3>
+<div class="legend">
+<div><div class="box" style="background:cyan"></div>Neuron</div>
+<div><div class="box" style="background:white"></div>Firing</div>
+<div><div class="box" style="background:yellow"></div>Tumor</div>
+<div><div class="box" style="background:red"></div>Inflammation</div>
+<div><div class="box" style="background:green"></div>Growth</div>
+<div><div class="box" style="background:blue"></div>Toxicity</div>
+</div>
+
+<h3>Save</h3>
+<button id="save">Save</button>
+<button id="load">Load</button>
 
 </div>
 
 <script>
 
-// ===== CANVAS FIX =====
-const sim = document.getElementById("sim");
-const ctx = sim.getContext("2d");
-const graph = document.getElementById("graph");
-const gctx = graph.getContext("2d");
+// ===== SETUP =====
+const sim=document.getElementById("sim");
+const ctx=sim.getContext("2d");
+const graph=document.getElementById("graph");
+const gctx=graph.getContext("2d");
 
 function resize(){
-  sim.width = window.innerWidth - 320;
-  sim.height = window.innerHeight;
-  graph.width = sim.width;
-  graph.height = 120;
+ sim.width=window.innerWidth-320;
+ sim.height=window.innerHeight;
+ graph.width=sim.width;
+ graph.height=120;
 }
 resize();
-window.addEventListener("resize", resize);
+window.onresize=resize;
 
-// ===== CONSTANTS =====
-const SIZE = 60;
+const SIZE=60;
 let cellSize;
 
 // ===== STATE =====
-let grid = [], field = [], running=false, history=[];
+let grid=[], field=[], running=false, history=[], effects=[];
 
 // ===== INIT =====
 function init(){
-  grid=[]; field=[]; history=[];
-  cellSize = sim.width / SIZE;
+ grid=[]; field=[]; history=[];
+ cellSize=sim.width/SIZE;
 
-  for(let x=0;x<SIZE;x++){
-    grid[x]=[]; field[x]=[];
-    for(let y=0;y<SIZE;y++){
-      grid[x][y]=Math.random()<0.1?{type:"neuron",h:1,f:0}:null;
-      field[x][y]={i:0,g:0,t:0};
-    }
+ for(let x=0;x<SIZE;x++){
+  grid[x]=[]; field[x]=[];
+  for(let y=0;y<SIZE;y++){
+   grid[x][y]=Math.random()<0.1?{type:"neuron",h:1,f:0}:null;
+   field[x][y]={i:0,g:0,t:0};
   }
+ }
 }
 init();
 
 // ===== PRESETS =====
 function preset(p){
-  init();
-  for(let x=0;x<SIZE;x++){
-    for(let y=0;y<SIZE;y++){
-      if(p==="inflamed") field[x][y].i=2;
-      if(p==="degeneration"){ field[x][y].t=1.5; }
-      if(p==="tumor" && Math.random()<0.1){
-        grid[x][y]={type:"tumor",h:1,f:0};
-      }
-    }
+ init();
+ for(let x=0;x<SIZE;x++){
+  for(let y=0;y<SIZE;y++){
+   if(p==="inflamed") field[x][y].i=2;
+   if(p==="degeneration") field[x][y].t=1.5;
+   if(p==="tumor" && Math.random()<0.1){
+     grid[x][y]={type:"tumor",h:1,f:0};
+   }
   }
-}
-
-// ===== DIFFUSION =====
-function diffuse(){
-  let nf=JSON.parse(JSON.stringify(field));
-  let r=0.05;
-
-  for(let x=1;x<SIZE-1;x++){
-    for(let y=1;y<SIZE-1;y++){
-      for(let k of ["i","g","t"]){
-        let v=field[x][y][k];
-        let s=field[x+1][y][k]+field[x-1][y][k]+field[x][y+1][k]+field[x][y-1][k];
-        nf[x][y][k]=Math.max(0,Math.min(3,v+r*(s-4*v)));
-      }
-    }
-  }
-  field=nf;
+ }
 }
 
 // ===== STEP =====
 function step(){
-  diffuse();
+ for(let x=0;x<SIZE;x++){
+  for(let y=0;y<SIZE;y++){
+   let c=grid[x][y];
+   let f=field[x][y];
+   if(!c) continue;
 
-  for(let x=0;x<SIZE;x++){
-    for(let y=0;y<SIZE;y++){
-      let c=grid[x][y];
-      let f=field[x][y];
-      if(!c) continue;
+   let age=document.getElementById("age").value;
+   let sex=document.getElementById("sex").value;
 
-      if(c.type==="neuron"){
-        c.h += f.g*0.02 - f.i*0.03 - f.t*0.03;
-        c.h=Math.max(0,Math.min(1,c.h));
+   let ageFactor=1+(age-40)/100;
+   let sexFactor=sex==="female"?0.9:1;
 
-        if(c.h>0.7 && Math.random()<0.1){
-          c.f=1; f.g+=0.05;
-        } else c.f=0;
+   if(c.type==="neuron"){
+    c.h += f.g*0.02 - f.i*0.03*sexFactor - f.t*0.03*ageFactor;
+    c.h=Math.max(0,Math.min(1,c.h));
 
-        if(c.h<=0){ grid[x][y]=null; f.t+=0.3; }
-      }
+    if(c.h>0.7 && Math.random()<0.1){
+      c.f=1; f.g+=0.05;
+    } else c.f=0;
 
-      if(c.type==="tumor"){
-        f.i+=0.05;
-        if(Math.random()<0.02){
-          let nx=x+Math.floor(Math.random()*3)-1;
-          let ny=y+Math.floor(Math.random()*3)-1;
-          if(grid[nx]?.[ny]==null) grid[nx][ny]={type:"tumor",h:1,f:0};
-        }
-      }
-    }
+    if(c.h<=0){ grid[x][y]=null; }
+   }
+
+   if(c.type==="tumor"){
+    f.i+=0.05;
+   }
   }
+ }
 
-  let count=0;
-  for(let x=0;x<SIZE;x++){
-    for(let y=0;y<SIZE;y++){
-      if(grid[x][y]?.type==="neuron") count++;
-    }
+ let neurons=0, tumors=0, health=0;
+
+ for(let x=0;x<SIZE;x++){
+  for(let y=0;y<SIZE;y++){
+   let c=grid[x][y];
+   if(c){
+     if(c.type==="neuron"){neurons++; health+=c.h;}
+     if(c.type==="tumor") tumors++;
+   }
   }
+ }
 
-  history.push(count);
-  if(history.length>200) history.shift();
+ document.getElementById("stats").innerHTML=
+ `Neurons: ${neurons}<br>Tumors: ${tumors}<br>Avg Health: ${(health/(neurons||1)).toFixed(2)}`;
+
+ history.push(neurons);
+ if(history.length>200) history.shift();
 }
 
 // ===== DRAW =====
 function draw(){
-  ctx.clearRect(0,0,sim.width,sim.height);
+ ctx.clearRect(0,0,sim.width,sim.height);
 
-  for(let x=0;x<SIZE;x++){
-    for(let y=0;y<SIZE;y++){
-      let f=field[x][y];
+ for(let x=0;x<SIZE;x++){
+  for(let y=0;y<SIZE;y++){
+   let f=field[x][y];
+   ctx.fillStyle=`rgb(${f.i*80},${f.g*80},${f.t*80})`;
+   ctx.fillRect(x*cellSize,y*cellSize,cellSize,cellSize);
 
-      ctx.fillStyle=`rgb(${f.i*80},${f.g*80},${f.t*80})`;
-      ctx.fillRect(x*cellSize,y*cellSize,cellSize,cellSize);
-
-      let c=grid[x][y];
-      if(c){
-        ctx.fillStyle=c.type==="neuron"?(c.f?"white":"cyan"):"yellow";
-        ctx.fillRect(x*cellSize+2,y*cellSize+2,cellSize-4,cellSize-4);
-      }
-    }
+   let c=grid[x][y];
+   if(c){
+    ctx.fillStyle=c.type==="neuron"?(c.f?"white":"cyan"):"yellow";
+    ctx.fillRect(x*cellSize+2,y*cellSize+2,cellSize-4,cellSize-4);
+   }
   }
+ }
+
+ // draw therapy pulse
+ effects.forEach(e=>{
+   ctx.beginPath();
+   ctx.arc(e.x,e.y,e.r,0,Math.PI*2);
+   ctx.strokeStyle="white";
+   ctx.stroke();
+   e.r+=2;
+ });
+ effects=effects.filter(e=>e.r<50);
 }
 
 // ===== GRAPH =====
 function drawGraph(){
-  gctx.clearRect(0,0,graph.width,graph.height);
-  gctx.beginPath();
+ gctx.clearRect(0,0,graph.width,graph.height);
+ gctx.beginPath();
 
-  history.forEach((v,i)=>{
-    gctx.lineTo(i, graph.height - v);
-  });
+ history.forEach((v,i)=>{
+   gctx.lineTo(i,graph.height-v);
+ });
 
-  gctx.strokeStyle="cyan";
-  gctx.stroke();
+ gctx.strokeStyle="cyan";
+ gctx.stroke();
 }
 
-// ===== CLICK INTERACTION (FIXED) =====
-sim.addEventListener("click", e=>{
-  let rect=sim.getBoundingClientRect();
-  let x=Math.floor((e.clientX-rect.left)/cellSize);
-  let y=Math.floor((e.clientY-rect.top)/cellSize);
+// ===== CLICK =====
+sim.onclick=e=>{
+ let rect=sim.getBoundingClientRect();
+ let x=Math.floor((e.clientX-rect.left)/cellSize);
+ let y=Math.floor((e.clientY-rect.top)/cellSize);
 
-  if(e.shiftKey){
-    let type=document.getElementById("cell").value;
-    if(type==="erase") grid[x][y]=null;
-    else grid[x][y]={type:type,h:1,f:0};
-    draw(); // instant feedback
-    return;
+ let d=parseFloat(document.getElementById("dose").value);
+ let r=parseInt(document.getElementById("radius").value);
+ let drug=document.getElementById("drug").value;
+
+ effects.push({x:e.clientX-rect.left,y:e.clientY-rect.top,r:5});
+
+ for(let dx=-r;dx<=r;dx++){
+  for(let dy=-r;dy<=r;dy++){
+   let nx=x+dx, ny=y+dy;
+   if(field[nx]?.[ny]){
+     let f=field[nx][ny];
+
+     if(drug==="il10") f.i*=0.6;
+     if(drug==="bdnf") f.g+=0.5*d;
+     if(drug==="nac") f.t*=0.5;
+     if(drug==="tmz" && grid[nx][ny]?.type==="tumor") grid[nx][ny]=null;
+     if(drug==="stem") grid[nx][ny]={type:"neuron",h:1,f:0};
+     if(drug==="immune" && grid[nx][ny]?.type==="tumor") grid[nx][ny]=null;
+   }
   }
+ }
+};
 
-  let d=parseFloat(document.getElementById("dose").value);
-  let r=parseInt(document.getElementById("radius").value);
-  let drug=document.getElementById("drug").value;
-
-  for(let dx=-r;dx<=r;dx++){
-    for(let dy=-r;dy<=r;dy++){
-      let nx=x+dx, ny=y+dy;
-      if(field[nx]?.[ny]){
-        let f=field[nx][ny];
-
-        if(drug==="il10") f.i*=Math.exp(-0.4*d);
-        if(drug==="bdnf") f.g+=0.3*d;
-        if(drug==="nac") f.t*=Math.exp(-0.4*d);
-        if(drug==="tmz"){
-          if(grid[nx][ny]?.type==="tumor") grid[nx][ny]=null;
-        }
-      }
-    }
-  }
-
-  draw(); // instant feedback
-});
-
-// ===== BUTTONS (EXPLICIT FIX) =====
-document.getElementById("toggle").onclick=()=>running=!running;
-document.getElementById("reset").onclick=()=>{init(); draw();};
-
-document.querySelectorAll("[data-p]").forEach(b=>{
-  b.onclick=()=>{preset(b.dataset.p); draw();};
-});
+// ===== SAVE =====
+document.getElementById("save").onclick=()=>{
+ localStorage.setItem("sim",JSON.stringify({grid,field}));
+};
+document.getElementById("load").onclick=()=>{
+ let d=JSON.parse(localStorage.getItem("sim"));
+ if(d){grid=d.grid;field=d.field;}
+};
 
 // ===== LOOP =====
 function loop(){
-  if(running){
-    step();
-    draw();
-    drawGraph();
-  }
-  requestAnimationFrame(loop);
+ if(running){
+  step();
+  draw();
+  drawGraph();
+ }
+ requestAnimationFrame(loop);
 }
 
-draw();
+document.getElementById("toggle").onclick=()=>running=!running;
+document.getElementById("reset").onclick=init;
+document.querySelectorAll("[data-p]").forEach(b=>b.onclick=()=>preset(b.dataset.p));
+
 loop();
 
 </script>
